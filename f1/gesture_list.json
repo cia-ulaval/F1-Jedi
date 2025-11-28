@@ -1,0 +1,8 @@
+{
+    "num_gestures": 5,
+    "1": "No_Motion",
+    "2": "Wrist_Flexion",
+    "3": "Hand_Closed",
+    "4": "Hand_Opened",
+    "5": "Wrist_Extension"
+}
