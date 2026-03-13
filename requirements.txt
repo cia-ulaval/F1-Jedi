@@ -1,5 +1,4 @@
 libemg 
-vgamepad
 sifi_bridge_py
 numpy
 matplotlib
