@@ -3,5 +3,5 @@ sifi_bridge_py
 numpy
 matplotlib
 joblib
-sklearn
+scikit-learn
 pandas
