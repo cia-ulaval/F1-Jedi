@@ -2,3 +2,6 @@ libemg
 sifi_bridge_py
 numpy
 matplotlib
+joblib
+sklearn
+pandas
