@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
+import os
 from pathlib import Path
+from validate_dataset import validate_subject_folder
 
 DATA_DIR = Path("./data")
 
@@ -62,8 +64,8 @@ def process_file(file_path, window_size, step, class_map=CLASS_ID_MAP):
 def dataset_builder(fs_emg=2000, window_size_ms=200, step_ms=20):
     data_dir = DATA_DIR
 
-    window_size = int(window_size_ms * fs_emg / 1000)
-    step = int(step_ms * fs_emg / 1000)
+    window_size = int(window_size_ms * fs_emg / 1000)  # taille fenetre = 400
+    step = int(step_ms * fs_emg / 1000)  # taille step = 2
 
     all_windows = []
     all_labels = []
@@ -95,10 +97,19 @@ def dataset_builder(fs_emg=2000, window_size_ms=200, step_ms=20):
     return windows_emg, y
 
 
-if __name__ == "__main__":
-    import os
-    from validate_dataset import validate_subject_folder
+def save_dataset_to_csv(windows_emg, y, output_file="./dataset/emg_dataset.csv"):
+    output_file = Path(output_file)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
 
+    df_X = pd.DataFrame(windows_emg)
+    df_X["label"] = y
+
+    df_X.to_csv(output_file, index=False)
+
+    print("Dataset sauvegardé dans :", output_file)
+
+
+def main():
     folder = "./data"
     if not os.path.exists(folder):
         print(f"ERROR: {folder} does not exist")
@@ -108,4 +119,9 @@ if __name__ == "__main__":
             validate_subject_folder(os.path.join(folder, subject))
 
     print()
-    dataset_builder()
+    windows_emg, labels = dataset_builder()
+    save_dataset_to_csv(windows_emg, labels)
+
+
+if __name__ == "__main__":
+    main()
