@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Project-generated data
+data/
+models/
+
+# Local binaries
+*.exe
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,3 +1,4 @@
+import argparse
 import time
 import csv
 import re
@@ -97,15 +98,25 @@ def wait_for_emg(odh, timeout_s: float = 8.0, modality: str = "emg"):
     return False
 
 
-def collect_one_subject_all_poses(subject_raw: str):
+def resolve_subject_id(subject_raw: str | None) -> str:
+    if subject_raw is None or not subject_raw.strip():
+        return next_subject_id()
+    return format_subject_id(subject_raw)
+
+
+def collect_one_subject_all_poses(subject_raw: str | None = None):
     """
     - 1 fenêtre
     - rest 3s -> pose 5s -> rest 3s -> ...
     - 1 seul fichier par pose: data/Sxx/<Pose>.csv (EMG only)
     - aucune copie/réécriture d'images
     """
-    subject_id = next_subject_id()
+    subject_id = resolve_subject_id(subject_raw)
     subject_folder = DATA_ROOT / subject_id
+    if subject_folder.exists():
+        raise FileExistsError(
+            f"Le dossier {subject_folder} existe deja. Choisis un autre sujet ou supprime-le avant une nouvelle collecte."
+        )
     subject_folder.mkdir(parents=True, exist_ok=True)
 
     # Images: directement depuis ./poses (à côté du script)
@@ -281,6 +292,17 @@ def collect_one_subject_all_poses(subject_raw: str):
     dpg.destroy_context()
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Collecte EMG pour un sujet et les 5 poses.")
+    parser.add_argument(
+        "--subject",
+        type=str,
+        default=None,
+        help="Identifiant sujet, ex: 2 ou S02. Si absent, le prochain ID libre est utilise.",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    # mets "1", "2", "12", etc.
-    collect_one_subject_all_poses("1")
+    args = parse_args()
+    collect_one_subject_all_poses(args.subject)
