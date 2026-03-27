@@ -13,8 +13,6 @@ venv/
 .vscode/
 
 # Project-generated data
-data/
-models/
 
 # Local binaries
 *.exe
