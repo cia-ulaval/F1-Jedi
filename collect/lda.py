@@ -79,7 +79,7 @@ def train_lda(
 
     metrics = {
         "accuracy": float(accuracy_score(y_test, y_pred)),
-        "classification_report": classification_report(y_test, y_pred, digits=4),
+        "classification_report": classification_report(y_test, y_pred, digits=32),
         "confusion_matrix": confusion_matrix(y_test, y_pred),
     }
 

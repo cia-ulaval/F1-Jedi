@@ -98,13 +98,101 @@ def wait_for_emg(odh, timeout_s: float = 8.0, modality: str = "emg"):
     return False
 
 
+def patch_libemg_sifi_disconnect(libemg):
+    """
+    Compatibilite entre versions de sifi_bridge_py/libemg:
+    disconnect() peut renvoyer soit un bool, soit un dict {"connected": bool}.
+    """
+    try:
+        cls = libemg.streamers.SiFiBridgeStreamer
+    except Exception:
+        return
+
+    if getattr(cls, "_disconnect_patched_for_bool", False):
+        return
+
+    def disconnect_compat(self):
+        result = self.sb.disconnect()
+        if isinstance(result, dict):
+            self.connected = result.get("connected", False)
+        else:
+            self.connected = bool(result)
+        return self.connected
+
+    cls.disconnect = disconnect_compat
+    cls._disconnect_patched_for_bool = True
+
+
+def stop_streamer(streamer):
+    try:
+        if hasattr(streamer, "signal"):
+            streamer.signal.set()
+            streamer.join(timeout=5.0)
+    except Exception:
+        pass
+
+
+def start_emg_session(timeout_s: float = 10.0):
+    import libemg
+
+    patch_libemg_sifi_disconnect(libemg)
+
+    attempts = [
+        (
+            "BioPoint",
+            lambda: libemg.streamers.sifi_biopoint_streamer(
+                emg=True, imu=False, ppg=False, ecg=False, eda=False, streaming=False
+            ),
+        ),
+        (
+            "BioArmband",
+            lambda: libemg.streamers.sifi_bioarmband_streamer(
+                emg=True, imu=False, ppg=False, ecg=False, eda=False, streaming=False
+            ),
+        ),
+    ]
+
+    failures = []
+    for device_label, factory in attempts:
+        streamer = None
+        keep_streamer = False
+        try:
+            streamer, smis = factory()
+            odh = libemg.data_handler.OnlineDataHandler(shared_memory_items=smis)
+            if hasattr(odh, "prepare_smm"):
+                odh.prepare_smm()
+            if wait_for_emg(odh, timeout_s=timeout_s, modality="emg"):
+                keep_streamer = True
+                print("=== DEVICE CONNECTED ===")
+                print(device_label)
+                return streamer, odh, "emg"
+            failures.append(f"{device_label}: aucune donnee EMG recue avant {timeout_s:.0f}s")
+        except Exception as exc:
+            failures.append(f"{device_label}: {exc}")
+        finally:
+            if streamer is not None and not keep_streamer:
+                stop_streamer(streamer)
+
+    raise RuntimeError(
+        "Impossible de recevoir des donnees EMG depuis SiFi Bridge. "
+        + " | ".join(failures)
+    )
+
+
 def resolve_subject_id(subject_raw: str | None) -> str:
     if subject_raw is None or not subject_raw.strip():
         return next_subject_id()
     return format_subject_id(subject_raw)
 
 
-def collect_one_subject_all_poses(subject_raw: str | None = None):
+def increment_subject_id(subject_id: str, step: int = 1) -> str:
+    match = re.fullmatch(r"S(\d+)", subject_id)
+    if not match:
+        raise ValueError(f"Identifiant sujet invalide: {subject_id}")
+    return f"S{int(match.group(1)) + step:02d}"
+
+
+def collect_one_subject_all_poses(subject_raw: str | None = None, odh=None, modality: str = "emg"):
     """
     - 1 fenêtre
     - rest 3s -> pose 5s -> rest 3s -> ...
@@ -148,25 +236,15 @@ def collect_one_subject_all_poses(subject_raw: str | None = None):
     print("=== SUBJECT FOLDER ===")
     print(subject_folder.resolve())
 
-    # Import libemg (ton env doit être ok)
-    import libemg
+    if odh is None:
+        raise RuntimeError("Session EMG non initialisee.")
 
-    # EMG only
-    streamer, smis = libemg.streamers.sifi_biopoint_streamer(
-        emg=True, imu=False, ppg=False, ecg=False, eda=False, streaming=False
-    )
-
-    odh = libemg.data_handler.OnlineDataHandler(shared_memory_items=smis)
-    modality = "emg"
     ok = wait_for_emg(odh, timeout_s=10.0, modality=modality)
     if not ok:
         raise RuntimeError(
             "Aucune donnée EMG reçue après 10s. "
             "Vérifie SiFi Bridge / connexion bracelet / permissions."
         )
-
-    if hasattr(odh, "prepare_smm"):
-        odh.prepare_smm()
 
     # UI
     dpg.create_context()
@@ -282,14 +360,30 @@ def collect_one_subject_all_poses(subject_raw: str | None = None):
 
         dpg.render_dearpygui_frame()
 
-    # stop streamer
-    try:
-        if hasattr(streamer, "signal"):
-            streamer.signal.set()
-    except Exception:
-        pass
-
     dpg.destroy_context()
+
+
+def collect_repetitions(subject_raw: str | None = None, repetitions: int = 1):
+    if repetitions < 1:
+        raise ValueError("--repetitions doit etre >= 1.")
+
+    current_subject = resolve_subject_id(subject_raw) if subject_raw else None
+    streamer, odh, modality = start_emg_session(timeout_s=10.0)
+
+    try:
+        for rep_idx in range(repetitions):
+            if current_subject is None:
+                subject_for_run = None
+            else:
+                subject_for_run = current_subject
+
+            print(f"=== REPETITION {rep_idx + 1}/{repetitions} ===")
+            collect_one_subject_all_poses(subject_for_run, odh=odh, modality=modality)
+
+            if current_subject is not None:
+                current_subject = increment_subject_id(current_subject)
+    finally:
+        stop_streamer(streamer)
 
 
 def parse_args() -> argparse.Namespace:
@@ -300,9 +394,15 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Identifiant sujet, ex: 2 ou S02. Si absent, le prochain ID libre est utilise.",
     )
+    parser.add_argument(
+        "--repetitions",
+        type=int,
+        default=1,
+        help="Nombre de collectes consecutives a executer. Chaque repetition est enregistree comme un sujet distinct.",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    collect_one_subject_all_poses(args.subject)
+    collect_repetitions(args.subject, args.repetitions)

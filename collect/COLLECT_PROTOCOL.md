@@ -47,6 +47,18 @@ Collecte explicite pour `S03`:
 .\.venv\Scripts\python.exe .\collect\collect.py --subject S03
 ```
 
+Collecte de plusieurs repetitions consecutives, chacune en tant que sujet distinct:
+
+```powershell
+.\.venv\Scripts\python.exe .\collect\collect.py --repetitions 3
+```
+
+Collecte de plusieurs repetitions en commencant a `S10`:
+
+```powershell
+.\.venv\Scripts\python.exe .\collect\collect.py --subject S10 --repetitions 3
+```
+
 Entrainement offline:
 
 ```powershell
