@@ -4,7 +4,9 @@ from pathlib import Path
 from typing import Any
 
 import joblib
+import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
@@ -14,10 +16,12 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
 from offline_dataset import build_feature_dataset
+from offline_dataset import CLASS_NAME_MAP
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = REPO_ROOT / "models" / "lda_emg_features.joblib"
+PLOTS_DIR = REPO_ROOT / "models" / "plots"
 
 
 def build_lda_model() -> Pipeline:
@@ -154,12 +158,212 @@ def group_split_preserves_classes(
     return train_classes == test_classes
 
 
+def _class_labels(y: np.ndarray) -> list[str]:
+    return [CLASS_NAME_MAP[int(class_id)] for class_id in sorted(np.unique(y))]
+
+
+def plot_confusion_matrix_figure(
+    cm: np.ndarray,
+    labels: list[str],
+    title: str,
+    out_path: Path,
+) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    im = ax.imshow(cm, cmap="Blues")
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+    ax.set_title(title)
+    ax.set_xlabel("Prediction")
+    ax.set_ylabel("Verite")
+    ax.set_xticks(range(len(labels)))
+    ax.set_yticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=35, ha="right")
+    ax.set_yticklabels(labels)
+
+    max_value = float(np.max(cm)) if cm.size else 0.0
+    threshold = max_value / 2.0 if max_value > 0 else 0.0
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            value = int(cm[i, j])
+            ax.text(
+                j,
+                i,
+                str(value),
+                ha="center",
+                va="center",
+                color="white" if value > threshold else "black",
+            )
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_loso_fold_accuracies(folds: list[dict[str, Any]], out_path: Path) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    subjects = [",".join(fold["test_groups"]) for fold in folds]
+    accuracies = [fold["accuracy"] for fold in folds]
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    colors = ["#1f77b4" if acc >= np.mean(accuracies) else "#d62728" for acc in accuracies]
+    ax.bar(subjects, accuracies, color=colors)
+    ax.axhline(np.mean(accuracies), color="black", linestyle="--", linewidth=1.2, label="Moyenne LOSO")
+    ax.set_title("Accuracy LOSO par sujet")
+    ax.set_xlabel("Sujet teste")
+    ax.set_ylabel("Accuracy")
+    ax.set_ylim(0.0, max(1.0, max(accuracies) + 0.05))
+    ax.tick_params(axis="x", rotation=45)
+    ax.legend()
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_model_comparison(results: list[dict[str, Any]], out_path: Path) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    names = [result["model_name"] for result in results]
+    scores = [result["mean_accuracy"] for result in results]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.bar(names, scores, color=["#2ca02c", "#1f77b4", "#ff7f0e"][: len(names)])
+    ax.set_title("Comparaison des modeles en LOSO")
+    ax.set_xlabel("Modele")
+    ax.set_ylabel("Accuracy moyenne")
+    ax.set_ylim(0.0, max(1.0, max(scores) + 0.05))
+
+    for idx, score in enumerate(scores):
+        ax.text(idx, score + 0.01, f"{score:.3f}", ha="center", va="bottom")
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_feature_projection(
+    X: np.ndarray,
+    y: np.ndarray,
+    subjects: np.ndarray,
+    out_path: Path,
+    max_points: int = 2500,
+) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if len(X) > max_points:
+        rng = np.random.default_rng(42)
+        keep_idx = rng.choice(len(X), size=max_points, replace=False)
+        X_plot = X[keep_idx]
+        y_plot = y[keep_idx]
+        subjects_plot = subjects[keep_idx]
+    else:
+        X_plot = X
+        y_plot = y
+        subjects_plot = subjects
+
+    X_scaled = StandardScaler().fit_transform(X_plot)
+    coords = PCA(n_components=2, random_state=42).fit_transform(X_scaled)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    class_labels = _class_labels(y)
+    cmap_classes = plt.get_cmap("tab10")
+    cmap_subjects = plt.get_cmap("tab20")
+
+    for class_id in sorted(np.unique(y_plot)):
+        mask = y_plot == class_id
+        axes[0].scatter(
+            coords[mask, 0],
+            coords[mask, 1],
+            s=12,
+            alpha=0.6,
+            label=CLASS_NAME_MAP[int(class_id)],
+            color=cmap_classes(int(class_id) % 10),
+        )
+    axes[0].set_title("Projection PCA coloree par classe")
+    axes[0].set_xlabel("PC1")
+    axes[0].set_ylabel("PC2")
+    axes[0].legend(fontsize=8, loc="best")
+
+    unique_subjects = np.unique(subjects_plot)
+    for idx, subject in enumerate(unique_subjects):
+        mask = subjects_plot == subject
+        axes[1].scatter(
+            coords[mask, 0],
+            coords[mask, 1],
+            s=12,
+            alpha=0.6,
+            label=subject,
+            color=cmap_subjects(idx % 20),
+        )
+    axes[1].set_title("Projection PCA coloree par sujet")
+    axes[1].set_xlabel("PC1")
+    axes[1].set_ylabel("PC2")
+    if len(unique_subjects) <= 20:
+        axes[1].legend(fontsize=7, loc="best", ncol=2)
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
+def save_offline_plots(
+    metrics: dict[str, Any],
+    loso_metrics: dict[str, Any] | None,
+    model_comparison: list[dict[str, Any]],
+    X: np.ndarray,
+    y: np.ndarray,
+    subjects: np.ndarray,
+) -> list[Path]:
+    labels = _class_labels(y)
+    saved_paths: list[Path] = []
+
+    split_cm_path = PLOTS_DIR / "lda_subject_split_confusion_matrix.png"
+    plot_confusion_matrix_figure(
+        metrics["confusion_matrix"],
+        labels,
+        "LDA Offline - Confusion Matrix (split principal)",
+        split_cm_path,
+    )
+    saved_paths.append(split_cm_path)
+
+    if loso_metrics is not None:
+        loso_cm_path = PLOTS_DIR / "lda_loso_confusion_matrix.png"
+        plot_confusion_matrix_figure(
+            loso_metrics["confusion_matrix"],
+            labels,
+            "LDA Offline - Confusion Matrix LOSO",
+            loso_cm_path,
+        )
+        saved_paths.append(loso_cm_path)
+
+        loso_bar_path = PLOTS_DIR / "lda_loso_accuracy_per_subject.png"
+        plot_loso_fold_accuracies(loso_metrics["folds"], loso_bar_path)
+        saved_paths.append(loso_bar_path)
+
+    if model_comparison:
+        model_cmp_path = PLOTS_DIR / "lda_model_comparison_loso.png"
+        plot_model_comparison(model_comparison, model_cmp_path)
+        saved_paths.append(model_cmp_path)
+
+    projection_path = PLOTS_DIR / "lda_feature_projection_pca.png"
+    plot_feature_projection(X, y, subjects, projection_path)
+    saved_paths.append(projection_path)
+
+    return saved_paths
+
+
 def train_lda_offline(
+    X: np.ndarray | None = None,
+    y: np.ndarray | None = None,
+    subjects: np.ndarray | None = None,
+    files: np.ndarray | None = None,
     validation_mode: str = "auto",
     test_size: float = 0.2,
     random_state: int = 42,
 ) -> tuple[Pipeline, dict[str, Any]]:
-    X, y, subjects, files = build_feature_dataset()
+    if X is None or y is None or subjects is None or files is None:
+        X, y, subjects, files = build_feature_dataset()
 
     if validation_mode not in {"auto", "subject", "file"}:
         raise ValueError("validation_mode doit etre 'auto', 'subject' ou 'file'.")
@@ -226,6 +430,8 @@ def train_lda_offline(
             "confusion_matrix": confusion_matrix(y_test, y_pred),
             "n_train": int(len(y_train)),
             "n_test": int(len(y_test)),
+            "y_test": y_test,
+            "y_pred": y_pred,
         }
     )
 
@@ -305,8 +511,8 @@ def save_model(model: Pipeline, path: Path = MODEL_PATH) -> None:
 
 
 def main() -> None:
-    model, metrics = train_lda_offline()
-    X, y, subjects, _ = build_feature_dataset()
+    X, y, subjects, files = build_feature_dataset()
+    model, metrics = train_lda_offline(X=X, y=y, subjects=subjects, files=files)
     loso_metrics = (
         evaluate_leave_one_subject_out(X, y, subjects, model_builder=build_lda_model)
         if len(np.unique(subjects)) >= 2
@@ -353,8 +559,13 @@ def main() -> None:
         for result in model_comparison:
             print(f"{result['model_name']}: {result['mean_accuracy']:.4f}")
 
+    plot_paths = save_offline_plots(metrics, loso_metrics, model_comparison, X, y, subjects)
+
     save_model(model)
     print(f"\nModele sauvegarde dans: {MODEL_PATH}")
+    print("Graphiques sauvegardes dans:")
+    for path in plot_paths:
+        print(path)
 
 
 if __name__ == "__main__":
