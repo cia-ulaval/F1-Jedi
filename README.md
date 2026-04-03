@@ -52,6 +52,28 @@ pip install -r requirements.txt
 python main.py
 ```
 
+### Offline Training And Testing
+```bash
+# LDA complete evaluation
+python .\collect\lda_offline.py
+
+# LDA quick run
+python .\collect\lda_offline.py --quick
+
+# SVM complete evaluation
+python .\collect\svm_offline.py
+
+# SVM quick run
+python .\collect\svm_offline.py --quick
+
+# SVM quick run with probabilities enabled
+python .\collect\svm_offline.py --quick --proba
+
+# Load and test an offline model
+python .\collect\test_offline_model.py svm
+python .\collect\test_offline_model.py lda
+```
+
 ## 🎮 Controls for discrete actions (Mapped from EMG Signals) with pynput
 | Gesture | Action |
 |---------|--------|

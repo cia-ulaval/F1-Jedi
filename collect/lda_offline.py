@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 from typing import Any
 
@@ -520,22 +521,38 @@ def save_model(model: Pipeline, path: Path = MODEL_PATH) -> None:
     joblib.dump(model, path)
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Entrainement offline d'un LDA EMG.")
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Entraine et sauvegarde le modele sans lancer le LOSO ni la comparaison complete.",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
     X, y, sessions, files = build_feature_dataset()
     model, metrics = train_lda_offline(X=X, y=y, sessions=sessions, files=files)
-    loso_metrics = (
-        evaluate_leave_one_subject_out(X, y, sessions, model_builder=build_lda_model)
-        if len(np.unique(sessions)) >= 2
-        else None
-    )
-    model_comparison = (
-        evaluate_model_candidates(X, y, sessions)
-        if len(np.unique(sessions)) >= 2
-        else []
-    )
+    loso_metrics = None
+    model_comparison: list[dict[str, Any]] = []
+
+    if not args.quick:
+        loso_metrics = (
+            evaluate_leave_one_subject_out(X, y, sessions, model_builder=build_lda_model)
+            if len(np.unique(sessions)) >= 2
+            else None
+        )
+        model_comparison = (
+            evaluate_model_candidates(X, y, sessions)
+            if len(np.unique(sessions)) >= 2
+            else []
+        )
 
     print("=== Resultats LDA Offline (features EMG) ===")
     validation_mode_label = "session" if metrics["validation_mode"] in {"session", "subject"} else metrics["validation_mode"]
+    print(f"Mode rapide: {'oui' if args.quick else 'non'}")
     print(f"Validation: {validation_mode_label}")
     if metrics["validation_warning"]:
         print(f"Warning: {metrics['validation_warning']}")

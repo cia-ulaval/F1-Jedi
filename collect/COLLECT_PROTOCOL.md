@@ -1,13 +1,13 @@
 # Protocole De Collecte EMG
 
 ## Objectif
-Construire un dataset offline propre pour entrainer et valider le LDA sur plusieurs sujets.
+Construire un dataset offline propre pour entrainer et valider les modeles EMG entre sessions.
 
 ## Ordre recommande
 1. Collecter `S01`
 2. Collecter `S02`
 3. Collecter `S03`
-4. Entrainer avec `collect/lda_offline.py`
+4. Entrainer avec `collect/lda_offline.py` ou `collect/svm_offline.py`
 
 ## Avant Chaque Session
 - Positionner le capteur toujours au meme endroit.
@@ -59,11 +59,47 @@ Collecte de plusieurs repetitions en commencant a `S10`:
 .\.venv\Scripts\python.exe .\collect\collect.py --subject S10 --repetitions 3
 ```
 
-Entrainement offline:
+Entrainement offline LDA complet:
 
 ```powershell
 .\.venv\Scripts\python.exe .\collect\lda_offline.py
 ```
 
+Entrainement offline LDA rapide:
+
+```powershell
+.\.venv\Scripts\python.exe .\collect\lda_offline.py --quick
+```
+
+Entrainement offline SVM complet:
+
+```powershell
+.\.venv\Scripts\python.exe .\collect\svm_offline.py
+```
+
+Entrainement offline SVM rapide:
+
+```powershell
+.\.venv\Scripts\python.exe .\collect\svm_offline.py --quick
+```
+
+Entrainement offline SVM rapide avec probabilites:
+
+```powershell
+.\.venv\Scripts\python.exe .\collect\svm_offline.py --quick --proba
+```
+
+Test de chargement d'un modele offline:
+
+```powershell
+.\.venv\Scripts\python.exe .\collect\test_offline_model.py svm
+```
+
+Ou:
+
+```powershell
+.\.venv\Scripts\python.exe .\collect\test_offline_model.py lda
+```
+
 ## Regle Pratique
-Ne passez pas au temps reel tant que la validation par sujet n'est pas disponible avec au moins `S01`, `S02` et `S03`.
+Ne passez pas au temps reel tant que la validation par session n'est pas suffisamment stable sur plusieurs collectes.
