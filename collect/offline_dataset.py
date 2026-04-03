@@ -10,6 +10,13 @@ import pandas as pd
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 
+# Empiriquement, garder des fenetres un peu plus longues et retirer
+# davantage les bords de pose aide legerement la generalisation inter-sujets.
+DEFAULT_FS_EMG = 2000
+DEFAULT_WINDOW_SIZE_MS = 400
+DEFAULT_STEP_MS = 75
+DEFAULT_TRIM_EDGES_MS = 700
+
 CLASS_ID_MAP = {
     "Hand_Open": 0,
     "Hand_Close": 1,
@@ -26,7 +33,7 @@ CLASS_NAME_TO_ID = CLASS_ID_MAP.copy()
 class WindowSample:
     features: np.ndarray
     label: int
-    subject_id: str
+    session_id: str
     source_file: str
 
 
@@ -139,27 +146,27 @@ def extract_emg_features(window: np.ndarray) -> np.ndarray:
     return features
 
 
-def iter_subject_files(data_dir: Path = DATA_DIR) -> list[tuple[str, Path]]:
-    subject_files: list[tuple[str, Path]] = []
+def iter_session_files(data_dir: Path = DATA_DIR) -> list[tuple[str, Path]]:
+    session_files: list[tuple[str, Path]] = []
 
     if not data_dir.exists():
         raise FileNotFoundError(f"Dossier de donnees introuvable: {data_dir}")
 
-    for subject_dir in sorted(p for p in data_dir.iterdir() if p.is_dir()):
-        for csv_file in sorted(subject_dir.glob("*.csv")):
-            subject_files.append((subject_dir.name, csv_file))
+    for session_dir in sorted(p for p in data_dir.iterdir() if p.is_dir()):
+        for csv_file in sorted(session_dir.glob("*.csv")):
+            session_files.append((session_dir.name, csv_file))
 
-    if not subject_files:
+    if not session_files:
         raise FileNotFoundError(f"Aucun fichier CSV trouve dans {data_dir}")
 
-    return subject_files
+    return session_files
 
 
 def build_feature_dataset(
-    fs_emg: int = 2000,
-    window_size_ms: int = 200,
-    step_ms: int = 50,
-    trim_edges_ms: int = 250,
+    fs_emg: int = DEFAULT_FS_EMG,
+    window_size_ms: int = DEFAULT_WINDOW_SIZE_MS,
+    step_ms: int = DEFAULT_STEP_MS,
+    trim_edges_ms: int = DEFAULT_TRIM_EDGES_MS,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     window_size = int(window_size_ms * fs_emg / 1000)
     step = int(step_ms * fs_emg / 1000)
@@ -167,7 +174,7 @@ def build_feature_dataset(
 
     samples: list[WindowSample] = []
 
-    for subject_id, file_path in iter_subject_files():
+    for session_id, file_path in iter_session_files():
         class_id = get_class_id_from_file(file_path)
         if class_id is None:
             print(f"Ignore (classe inconnue): {file_path.name}")
@@ -183,7 +190,7 @@ def build_feature_dataset(
                 WindowSample(
                     features=extract_emg_features(window),
                     label=class_id,
-                    subject_id=subject_id,
+                    session_id=session_id,
                     source_file=file_path.stem,
                 )
             )
@@ -193,8 +200,8 @@ def build_feature_dataset(
 
     X = np.stack([sample.features for sample in samples]).astype(np.float32)
     y = np.asarray([sample.label for sample in samples], dtype=np.int64)
-    subjects = np.asarray([sample.subject_id for sample in samples])
-    files = np.asarray([f"{sample.subject_id}/{sample.source_file}" for sample in samples])
+    sessions = np.asarray([sample.session_id for sample in samples])
+    files = np.asarray([f"{sample.session_id}/{sample.source_file}" for sample in samples])
 
     print("X_features:", X.shape)
     print("y:", y.shape)
@@ -203,16 +210,16 @@ def build_feature_dataset(
     for class_id, count in zip(unique, counts):
         print(f"Classe {class_id} ({CLASS_NAME_MAP[class_id]}): {count} fenetres")
 
-    unique_subjects = np.unique(subjects)
-    print(f"Sujets: {len(unique_subjects)} -> {', '.join(unique_subjects)}")
+    unique_sessions = np.unique(sessions)
+    print(f"Sessions: {len(unique_sessions)} -> {', '.join(unique_sessions)}")
 
-    return X, y, subjects, files
+    return X, y, sessions, files
 
 
 def filter_dataset_by_classes(
     X: np.ndarray,
     y: np.ndarray,
-    subjects: np.ndarray,
+    sessions: np.ndarray,
     files: np.ndarray,
     class_names: list[str],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[int, str]]:
@@ -228,11 +235,11 @@ def filter_dataset_by_classes(
 
     X_filtered = X[mask]
     y_filtered = y[mask]
-    subjects_filtered = subjects[mask]
+    sessions_filtered = sessions[mask]
     files_filtered = files[mask]
 
     remap = {old_id: new_id for new_id, old_id in enumerate(selected_ids)}
     y_remapped = np.asarray([remap[int(label)] for label in y_filtered], dtype=np.int64)
     remapped_name_map = {new_id: CLASS_NAME_MAP[old_id] for old_id, new_id in remap.items()}
 
-    return X_filtered, y_remapped, subjects_filtered, files_filtered, remapped_name_map
+    return X_filtered, y_remapped, sessions_filtered, files_filtered, remapped_name_map

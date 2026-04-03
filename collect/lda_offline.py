@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Any
 
 import joblib
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.decomposition import PCA
@@ -39,7 +41,7 @@ def build_lda_model() -> Pipeline:
     )
 
 
-def build_svm_model() -> Pipeline:
+def build_svm_model(probability: bool = True) -> Pipeline:
     return Pipeline(
         steps=[
             ("scaler", StandardScaler()),
@@ -50,6 +52,7 @@ def build_svm_model() -> Pipeline:
                     C=3.0,
                     gamma="scale",
                     class_weight="balanced",
+                    probability=probability,
                 ),
             ),
         ]
@@ -203,15 +206,15 @@ def plot_confusion_matrix_figure(
 
 def plot_loso_fold_accuracies(folds: list[dict[str, Any]], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    subjects = [",".join(fold["test_groups"]) for fold in folds]
+    sessions = [",".join(fold["test_groups"]) for fold in folds]
     accuracies = [fold["accuracy"] for fold in folds]
 
     fig, ax = plt.subplots(figsize=(12, 5))
     colors = ["#1f77b4" if acc >= np.mean(accuracies) else "#d62728" for acc in accuracies]
-    ax.bar(subjects, accuracies, color=colors)
+    ax.bar(sessions, accuracies, color=colors)
     ax.axhline(np.mean(accuracies), color="black", linestyle="--", linewidth=1.2, label="Moyenne LOSO")
-    ax.set_title("Accuracy LOSO par sujet")
-    ax.set_xlabel("Sujet teste")
+    ax.set_title("Accuracy LOSO par session")
+    ax.set_xlabel("Session testee")
     ax.set_ylabel("Accuracy")
     ax.set_ylim(0.0, max(1.0, max(accuracies) + 0.05))
     ax.tick_params(axis="x", rotation=45)
@@ -245,7 +248,7 @@ def plot_model_comparison(results: list[dict[str, Any]], out_path: Path) -> None
 def plot_feature_projection(
     X: np.ndarray,
     y: np.ndarray,
-    subjects: np.ndarray,
+    sessions: np.ndarray,
     out_path: Path,
     max_points: int = 2500,
 ) -> None:
@@ -256,11 +259,11 @@ def plot_feature_projection(
         keep_idx = rng.choice(len(X), size=max_points, replace=False)
         X_plot = X[keep_idx]
         y_plot = y[keep_idx]
-        subjects_plot = subjects[keep_idx]
+        sessions_plot = sessions[keep_idx]
     else:
         X_plot = X
         y_plot = y
-        subjects_plot = subjects
+        sessions_plot = sessions
 
     X_scaled = StandardScaler().fit_transform(X_plot)
     coords = PCA(n_components=2, random_state=42).fit_transform(X_scaled)
@@ -268,7 +271,7 @@ def plot_feature_projection(
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     class_labels = _class_labels(y)
     cmap_classes = plt.get_cmap("tab10")
-    cmap_subjects = plt.get_cmap("tab20")
+    cmap_sessions = plt.get_cmap("tab20")
 
     for class_id in sorted(np.unique(y_plot)):
         mask = y_plot == class_id
@@ -285,21 +288,21 @@ def plot_feature_projection(
     axes[0].set_ylabel("PC2")
     axes[0].legend(fontsize=8, loc="best")
 
-    unique_subjects = np.unique(subjects_plot)
-    for idx, subject in enumerate(unique_subjects):
-        mask = subjects_plot == subject
+    unique_sessions = np.unique(sessions_plot)
+    for idx, session in enumerate(unique_sessions):
+        mask = sessions_plot == session
         axes[1].scatter(
             coords[mask, 0],
             coords[mask, 1],
             s=12,
             alpha=0.6,
-            label=subject,
-            color=cmap_subjects(idx % 20),
+            label=session,
+            color=cmap_sessions(idx % 20),
         )
-    axes[1].set_title("Projection PCA coloree par sujet")
+    axes[1].set_title("Projection PCA coloree par session")
     axes[1].set_xlabel("PC1")
     axes[1].set_ylabel("PC2")
-    if len(unique_subjects) <= 20:
+    if len(unique_sessions) <= 20:
         axes[1].legend(fontsize=7, loc="best", ncol=2)
 
     fig.tight_layout()
@@ -313,41 +316,43 @@ def save_offline_plots(
     model_comparison: list[dict[str, Any]],
     X: np.ndarray,
     y: np.ndarray,
-    subjects: np.ndarray,
+    sessions: np.ndarray,
+    plot_prefix: str = "lda",
+    plot_label: str = "LDA Offline",
 ) -> list[Path]:
     labels = _class_labels(y)
     saved_paths: list[Path] = []
 
-    split_cm_path = PLOTS_DIR / "lda_subject_split_confusion_matrix.png"
+    split_cm_path = PLOTS_DIR / f"{plot_prefix}_session_split_confusion_matrix.png"
     plot_confusion_matrix_figure(
         metrics["confusion_matrix"],
         labels,
-        "LDA Offline - Confusion Matrix (split principal)",
+        f"{plot_label} - Confusion Matrix (split principal par session)",
         split_cm_path,
     )
     saved_paths.append(split_cm_path)
 
     if loso_metrics is not None:
-        loso_cm_path = PLOTS_DIR / "lda_loso_confusion_matrix.png"
+        loso_cm_path = PLOTS_DIR / f"{plot_prefix}_loso_confusion_matrix.png"
         plot_confusion_matrix_figure(
             loso_metrics["confusion_matrix"],
             labels,
-            "LDA Offline - Confusion Matrix LOSO",
+            f"{plot_label} - Confusion Matrix LOSO",
             loso_cm_path,
         )
         saved_paths.append(loso_cm_path)
 
-        loso_bar_path = PLOTS_DIR / "lda_loso_accuracy_per_subject.png"
+        loso_bar_path = PLOTS_DIR / f"{plot_prefix}_loso_accuracy_per_session.png"
         plot_loso_fold_accuracies(loso_metrics["folds"], loso_bar_path)
         saved_paths.append(loso_bar_path)
 
     if model_comparison:
-        model_cmp_path = PLOTS_DIR / "lda_model_comparison_loso.png"
+        model_cmp_path = PLOTS_DIR / f"{plot_prefix}_model_comparison_loso.png"
         plot_model_comparison(model_comparison, model_cmp_path)
         saved_paths.append(model_cmp_path)
 
-    projection_path = PLOTS_DIR / "lda_feature_projection_pca.png"
-    plot_feature_projection(X, y, subjects, projection_path)
+    projection_path = PLOTS_DIR / f"{plot_prefix}_feature_projection_pca.png"
+    plot_feature_projection(X, y, sessions, projection_path)
     saved_paths.append(projection_path)
 
     return saved_paths
@@ -356,25 +361,30 @@ def save_offline_plots(
 def train_lda_offline(
     X: np.ndarray | None = None,
     y: np.ndarray | None = None,
-    subjects: np.ndarray | None = None,
+    sessions: np.ndarray | None = None,
     files: np.ndarray | None = None,
     validation_mode: str = "auto",
     test_size: float = 0.2,
     random_state: int = 42,
+    subjects: np.ndarray | None = None,
 ) -> tuple[Pipeline, dict[str, Any]]:
-    if X is None or y is None or subjects is None or files is None:
-        X, y, subjects, files = build_feature_dataset()
+    if sessions is None and subjects is not None:
+        sessions = subjects
 
-    if validation_mode not in {"auto", "subject", "file"}:
-        raise ValueError("validation_mode doit etre 'auto', 'subject' ou 'file'.")
+    if X is None or y is None or sessions is None or files is None:
+        X, y, sessions, files = build_feature_dataset()
+
+    if validation_mode not in {"auto", "session", "subject", "file"}:
+        raise ValueError("validation_mode doit etre 'auto', 'session', 'subject' ou 'file'.")
 
     group_candidates = {
-        "subject": subjects,
+        "session": sessions,
+        "subject": sessions,
         "file": files,
     }
 
     if validation_mode == "auto":
-        chosen_mode = "subject" if len(np.unique(subjects)) >= 2 else "file"
+        chosen_mode = "session" if len(np.unique(sessions)) >= 2 else "file"
     else:
         chosen_mode = validation_mode
 
@@ -441,7 +451,7 @@ def train_lda_offline(
 def evaluate_leave_one_subject_out(
     X: np.ndarray,
     y: np.ndarray,
-    subjects: np.ndarray,
+    sessions: np.ndarray,
     model_builder: Any,
 ) -> dict[str, Any]:
     logo = LeaveOneGroupOut()
@@ -449,11 +459,11 @@ def evaluate_leave_one_subject_out(
     aggregated_true: list[np.ndarray] = []
     aggregated_pred: list[np.ndarray] = []
 
-    for train_idx, test_idx in logo.split(X, y, groups=subjects):
+    for train_idx, test_idx in logo.split(X, y, groups=sessions):
         X_train, X_test = X[train_idx], X[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
-        train_subjects = np.unique(subjects[train_idx])
-        test_subjects = np.unique(subjects[test_idx])
+        train_sessions = np.unique(sessions[train_idx])
+        test_sessions = np.unique(sessions[test_idx])
 
         model = model_builder()
         model.fit(X_train, y_train)
@@ -463,8 +473,8 @@ def evaluate_leave_one_subject_out(
         aggregated_pred.append(y_pred)
         fold_metrics.append(
             {
-                "train_groups": train_subjects,
-                "test_groups": test_subjects,
+                "train_groups": train_sessions,
+                "test_groups": test_sessions,
                 "accuracy": float(accuracy_score(y_test, y_pred)),
             }
         )
@@ -488,11 +498,11 @@ def evaluate_leave_one_subject_out(
 def evaluate_model_candidates(
     X: np.ndarray,
     y: np.ndarray,
-    subjects: np.ndarray,
+    sessions: np.ndarray,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for model_name, model_builder in get_model_builders().items():
-        metrics = evaluate_leave_one_subject_out(X, y, subjects, model_builder=model_builder)
+        metrics = evaluate_leave_one_subject_out(X, y, sessions, model_builder=model_builder)
         results.append(
             {
                 "model_name": model_name,
@@ -511,21 +521,22 @@ def save_model(model: Pipeline, path: Path = MODEL_PATH) -> None:
 
 
 def main() -> None:
-    X, y, subjects, files = build_feature_dataset()
-    model, metrics = train_lda_offline(X=X, y=y, subjects=subjects, files=files)
+    X, y, sessions, files = build_feature_dataset()
+    model, metrics = train_lda_offline(X=X, y=y, sessions=sessions, files=files)
     loso_metrics = (
-        evaluate_leave_one_subject_out(X, y, subjects, model_builder=build_lda_model)
-        if len(np.unique(subjects)) >= 2
+        evaluate_leave_one_subject_out(X, y, sessions, model_builder=build_lda_model)
+        if len(np.unique(sessions)) >= 2
         else None
     )
     model_comparison = (
-        evaluate_model_candidates(X, y, subjects)
-        if len(np.unique(subjects)) >= 2
+        evaluate_model_candidates(X, y, sessions)
+        if len(np.unique(sessions)) >= 2
         else []
     )
 
     print("=== Resultats LDA Offline (features EMG) ===")
-    print(f"Validation: {metrics['validation_mode']}")
+    validation_mode_label = "session" if metrics["validation_mode"] in {"session", "subject"} else metrics["validation_mode"]
+    print(f"Validation: {validation_mode_label}")
     if metrics["validation_warning"]:
         print(f"Warning: {metrics['validation_warning']}")
     if len(metrics["train_groups"]) > 0:
@@ -541,7 +552,7 @@ def main() -> None:
     print(metrics["confusion_matrix"])
 
     if loso_metrics is not None:
-        print("\n=== Leave-One-Subject-Out ===")
+        print("\n=== Leave-One-Session-Out ===")
         print(f"Accuracy moyenne: {loso_metrics['mean_accuracy']:.4f}")
         for index, fold in enumerate(loso_metrics["folds"], start=1):
             print(
@@ -555,11 +566,11 @@ def main() -> None:
         print(loso_metrics["confusion_matrix"])
 
     if model_comparison:
-        print("\n=== Comparaison Modeles (LOSO) ===")
+        print("\n=== Comparaison Modeles (LOSO par session) ===")
         for result in model_comparison:
             print(f"{result['model_name']}: {result['mean_accuracy']:.4f}")
 
-    plot_paths = save_offline_plots(metrics, loso_metrics, model_comparison, X, y, subjects)
+    plot_paths = save_offline_plots(metrics, loso_metrics, model_comparison, X, y, sessions)
 
     save_model(model)
     print(f"\nModele sauvegarde dans: {MODEL_PATH}")

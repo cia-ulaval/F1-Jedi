@@ -1,10 +1,14 @@
-from lda import load_model, predict
+from offline_model import load_model, predict
 import numpy as np
+import sys
 
-model = load_model()
+model_name = sys.argv[1] if len(sys.argv) > 1 else "svm"
+model = load_model(model_name=model_name)
 
-x_new = np.array([0.12, 0.87, 1.04, 0.33], dtype=np.float32)
+feature_count = int(getattr(model, "n_features_in_", 11))
+x_new = np.zeros(feature_count, dtype=np.float32)
 pred, proba = predict(model, x_new)
 
+print("Modele:", model_name)
 print("Classe prédite:", pred)
 print("Probabilités:", proba)
