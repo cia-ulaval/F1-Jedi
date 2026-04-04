@@ -31,7 +31,7 @@ def find_last_model(model_dir, subject):
 
 def load_model(model_path) -> libemg.emg_predictor.EMGClassifier:
     if model_path is None:
-        model_path = find_last_model(config.MODEL_PATH, config.SESSION)
+        model_path = find_last_model(config.MODEL_PATH, config.SESSION_TRAIN)
     model_path_obj = Path(model_path)
     if not model_path_obj.exists():
         raise FileNotFoundError(f"Model file not found: {model_path_obj}")
@@ -144,7 +144,7 @@ def run_realtime_test(model_path, majority_vote=config.MAJORITY_VOTE_WINDOW, del
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Super-simple real-time EMG prediction test using a saved libemg model.")
-    parser.add_argument("model_path", default=MODEL_PATH, help="Path to the saved .pkl model file")
+    parser.add_argument("--model_path", type=str, default=MODEL_PATH, help="Path to the saved .pkl model file")
     parser.add_argument("--majority-vote", type=int, default=config.MAJORITY_VOTE_WINDOW, help="Majority vote window size (1 disables it)")
     parser.add_argument("--delay", type=float, default=config.DELAY_BETWEEN_PREDICTIONS, help="Polling delay in seconds")
     parser.add_argument("--no-filter", action="store_true", help="Disable online notch/bandpass filters")

@@ -7,7 +7,7 @@ from pathlib import Path
 from config import Config
 config = Config()
 
-SUBJECT = config.SESSION
+SUBJECT = config.SESSION_TRAIN
 
 def filter_offline_data(odh:libemg.data_handler.OfflineDataHandler):
     fi = libemg.filtering.Filter(config.EMG_FS)
@@ -58,7 +58,7 @@ def save_model(model:libemg.emg_predictor.EMGClassifier, subject):
     print(f"Model saved at {model_path}")
 
 def train_and_test():
-    data_train, data_test = load_data(config.SESSION, config.TRAIN_REPS, config.TEST_REPS)
+    data_train, data_test = load_data(config.SESSION_COLLECT, config.TRAIN_REPS, config.TEST_REPS)
     
     features_train, labels_train = extract_features(data_train)
     features_test, labels_test = extract_features(data_test)
@@ -69,8 +69,8 @@ def train_and_test():
     predictions, _ = model.run(features_test)
     accuracy = accuracy_score(labels_test, predictions)
     
-    print(f"Subject {config.SESSION} - Accuracy: {accuracy:.4f}")
-    save_model(model, config.SESSION)
+    print(f"Subject {config.SESSION_TRAIN} - Accuracy: {accuracy:.4f}")
+    save_model(model, config.SESSION_TRAIN)
     print("Training and testing completed.")
     
 if __name__ == "__main__":

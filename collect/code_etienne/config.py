@@ -4,7 +4,7 @@ class Config:
         self.ROOT = "."
 
         # Data collection
-        self.SESSION = 1
+        self.SESSION_COLLECT = 2
         self.CLASSES = [1,2,3,5,4]
         self.NUM_CLASSES = len(self.CLASSES)
         self.REP_TIME = 5
@@ -13,6 +13,7 @@ class Config:
         self.REPS = [i for i in range(0, self.NUM_REPS)]
 
         # Data split
+        self.SESSION_TRAIN = 1
         self.TRAIN_REPS = [2,0,4,1,5]
         self.TEST_REPS = [3,6]
         
@@ -27,7 +28,7 @@ class Config:
         self.GUI_HEIGHT = 725
         self.MEDIA_FOLDER = self.ROOT + "/images/"
         self.DATA_PRE_PATH = self.ROOT + "/dataset/"
-        self.DATA_PATH_SUBJECT = str(self.DATA_PRE_PATH) + "S" + str(self.SESSION) + "/"
+        self.DATA_PATH_SUBJECT = str(self.DATA_PRE_PATH) + "S" + str(self.SESSION_COLLECT) + "/"
         self.DATA_PATH_TRAIN = str(self.DATA_PRE_PATH)
         self.MODEL_PATH = self.ROOT + "/models/"
         
