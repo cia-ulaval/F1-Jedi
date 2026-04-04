@@ -13,12 +13,12 @@ class Config:
         self.REPS = [i for i in range(0, self.NUM_REPS)]
 
         # Data split
-        self.SESSION_TRAIN = 1
+        self.SESSION_TRAIN = 2
         self.TRAIN_REPS = [2,0,4,1,5]
         self.TEST_REPS = [3,6]
         
         # realtime testing
-        self.MAJORITY_VOTE_WINDOW = 20  # Number of samples for majority vote (set to 1 to disable)
+        self.MAJORITY_VOTE_WINDOW = 40  # Number of samples for majority vote (set to 1 to disable)
         self.DELAY_BETWEEN_PREDICTIONS = 0.02  # seconds
         self.USE_FILTERS = True  # Set to False to disable online filters
         self.TIMEOUT = 10.0  # seconds
@@ -30,7 +30,7 @@ class Config:
         self.DATA_PRE_PATH = self.ROOT + "/dataset/"
         self.DATA_PATH_SUBJECT = str(self.DATA_PRE_PATH) + "S" + str(self.SESSION_COLLECT) + "/"
         self.DATA_PATH_TRAIN = str(self.DATA_PRE_PATH)
-        self.MODEL_PATH = self.ROOT + "/models/"
+        self.MODEL_PATH = self.ROOT + "/../../models/"
         
         # Windows in ms
         self.WINDOW_SIZE_MS = 200
