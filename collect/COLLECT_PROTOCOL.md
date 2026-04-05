@@ -7,7 +7,8 @@ Construire un dataset offline propre pour entrainer et valider les modeles EMG e
 1. Collecter `S01`
 2. Collecter `S02`
 3. Collecter `S03`
-4. Entrainer avec `collect/lda_offline.py` ou `collect/svm_offline.py`
+4. Entrainer avec `collect/code_etienne/trainning_etienne.py`
+5. Valider en temps reel avec `collect/code_etienne/realtime_test_etienne.py`
 
 ## Avant Chaque Session
 - Positionner le capteur toujours au meme endroit.
@@ -29,77 +30,41 @@ Construire un dataset offline propre pour entrainer et valider les modeles EMG e
 - `Wrist_Flexion`
 
 ## Commandes
-Collecte auto sur le prochain sujet libre:
+Collecte avec le script courant:
 
 ```powershell
-.\.venv\Scripts\python.exe .\collect\collect.py
+.\.venv\Scripts\python.exe .\collect\code_etienne\collect_etienne.py
 ```
 
-Collecte explicite pour `S02`:
+Entrainement sur `S1` avec 5 repetitions pour train et 2 pour test:
 
 ```powershell
-.\.venv\Scripts\python.exe .\collect\collect.py --subject S02
+.\.venv\Scripts\python.exe .\collect\code_etienne\trainning_etienne.py --session 1 --train-reps 2,0,4,1,5 --test-reps 3,6
 ```
 
-Collecte explicite pour `S03`:
+Autre exemple avec un split different dans la meme session:
 
 ```powershell
-.\.venv\Scripts\python.exe .\collect\collect.py --subject S03
+.\.venv\Scripts\python.exe .\collect\code_etienne\trainning_etienne.py --session 1 --train-reps 0,1,2,3,4 --test-reps 5,6
 ```
 
-Collecte de plusieurs repetitions consecutives, chacune en tant que sujet distinct:
+Test temps reel avec le dernier modele sauvegarde:
 
 ```powershell
-.\.venv\Scripts\python.exe .\collect\collect.py --repetitions 3
+.\.venv\Scripts\python.exe .\collect\code_etienne\realtime_test_etienne.py
 ```
 
-Collecte de plusieurs repetitions en commencant a `S10`:
+Test temps reel avec un modele explicite:
 
 ```powershell
-.\.venv\Scripts\python.exe .\collect\collect.py --subject S10 --repetitions 3
+.\.venv\Scripts\python.exe .\collect\code_etienne\realtime_test_etienne.py --model_path .\models\libemg_lda_S1_20260404_015612.pkl
 ```
 
-Entrainement offline LDA complet:
-
-```powershell
-.\.venv\Scripts\python.exe .\collect\lda_offline.py
-```
-
-Entrainement offline LDA rapide:
-
-```powershell
-.\.venv\Scripts\python.exe .\collect\lda_offline.py --quick
-```
-
-Entrainement offline SVM complet:
-
-```powershell
-.\.venv\Scripts\python.exe .\collect\svm_offline.py
-```
-
-Entrainement offline SVM rapide:
-
-```powershell
-.\.venv\Scripts\python.exe .\collect\svm_offline.py --quick
-```
-
-Entrainement offline SVM rapide avec probabilites:
-
-```powershell
-.\.venv\Scripts\python.exe .\collect\svm_offline.py --quick --proba
-```
-
-Test de chargement d'un modele offline:
-
-```powershell
-.\.venv\Scripts\python.exe .\collect\test_offline_model.py svm
-```
-
-Ou:
-
-```powershell
-.\.venv\Scripts\python.exe .\collect\test_offline_model.py lda
-```
+Notes:
+- Le workflow courant utilise les scripts dans `collect/code_etienne`.
+- Les 5 classes sont conservees pour l'entrainement.
+- Les options `--train-reps` et `--test-reps` servent a choisir quelles repetitions d'une session vont au train et au test.
+- Si aucune repetition n'est fournie, le script prend les valeurs definies dans `config.py`.
 
 ## Regle Pratique
 Ne passez pas au temps reel tant que la validation par session n'est pas suffisamment stable sur plusieurs collectes.

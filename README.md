@@ -52,27 +52,25 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### Offline Training And Testing
+### Current EMG Workflow
 ```bash
-# LDA complete evaluation
-python .\collect\lda_offline.py
+# Activate the project virtual environment
+.\.venv\Scripts\Activate.ps1
 
-# LDA quick run
-python .\collect\lda_offline.py --quick
+# Collect one session
+python .\collect\code_etienne\collect_etienne.py
 
-# SVM complete evaluation
-python .\collect\svm_offline.py
+# Train on a given session with explicit train/test repetitions
+python .\collect\code_etienne\trainning_etienne.py --session 1 --train-reps 2,0,4,1,5 --test-reps 3,6
 
-# SVM quick run
-python .\collect\svm_offline.py --quick
-
-# SVM quick run with probabilities enabled
-python .\collect\svm_offline.py --quick --proba
-
-# Load and test an offline model
-python .\collect\test_offline_model.py svm
-python .\collect\test_offline_model.py lda
+# Run real-time inference with the latest saved model for the selected session
+python .\collect\code_etienne\realtime_test_etienne.py
 ```
+
+Notes:
+- The current workflow uses the scripts in `collect/code_etienne/`.
+- `trainning_etienne.py` keeps the 5 gesture classes and lets you choose the dataset session plus the train/test repetitions at launch time.
+- `realtime_test_etienne.py` loads the latest saved model automatically if no `--model_path` is provided.
 
 ## 🎮 Controls for discrete actions (Mapped from EMG Signals) with pynput
 | Gesture | Action |
