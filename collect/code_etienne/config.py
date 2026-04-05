@@ -13,7 +13,7 @@ class Config:
         self.REPS = [i for i in range(0, self.NUM_REPS)]
 
         # Data split
-        self.SESSION_TRAIN = 2
+        self.SESSION_TRAIN = 1
         self.TRAIN_REPS = [2,0,4,1,5]
         self.TEST_REPS = [3,6]
         

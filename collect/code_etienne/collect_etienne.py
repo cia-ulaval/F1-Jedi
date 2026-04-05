@@ -1,4 +1,7 @@
-from config import Config
+try:
+    from config import Config
+except ImportError:
+    from code_etienne.config import Config
 import libemg
 import numpy as np
 import os

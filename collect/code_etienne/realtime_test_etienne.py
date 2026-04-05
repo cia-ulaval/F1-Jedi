@@ -7,8 +7,12 @@ import libemg
 from libemg.emg_predictor import OnlineEMGClassifier
 from libemg.environments.controllers import ClassifierController
 
-from config import Config
-from collect_etienne import prepare_streamer
+try:
+    from config import Config
+    from collect_etienne import prepare_streamer
+except ImportError:
+    from code_etienne.config import Config
+    from code_etienne.collect_etienne import prepare_streamer
 
 
 config = Config()
