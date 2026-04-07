@@ -32,6 +32,11 @@ try:
 except ImportError:
     vg = None
 
+try:
+    import keyboard
+except ImportError:
+    keyboard = None
+
 
 def apply_action(gamepad, label):
     action_name, action_code = GAME_ACTIONS.get(label, ("neutral", "none"))
@@ -46,6 +51,54 @@ def apply_action(gamepad, label):
         gamepad.left_joystick(x_value=20000, y_value=0)
 
     return action_name
+
+
+def apply_drive_action(gamepad, prediction_idx):
+    # Keep acceleration held in drive mode.
+    gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+
+    if prediction_idx == 0:  # Hand_Open
+        return "accelerate_only"
+    if prediction_idx == 1:  # Hand_Close
+        gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_B)
+        return "button_b"
+    if prediction_idx == 2:  # No_Motion
+        return "neutral"
+    if prediction_idx == 4:  # Wrist_Extension
+        gamepad.left_joystick(x_value=20000, y_value=0)
+        return "steer_right"
+    if prediction_idx == 3:  # Wrist_Flexion
+        gamepad.left_joystick(x_value=-20000, y_value=0)
+        return "steer_left"
+    return "unknown_prediction"
+
+
+def apply_keyboard_action(gamepad):
+    action_names = []
+
+    if keyboard.is_pressed("z"):
+        gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+        action_names.append("button_a")
+    if keyboard.is_pressed("x"):
+        gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_B)
+        action_names.append("button_b")
+    if keyboard.is_pressed("a"):
+        gamepad.left_joystick(x_value=-20000, y_value=0)
+        action_names.append("steer_left")
+    if keyboard.is_pressed("d"):
+        gamepad.left_joystick(x_value=20000, y_value=0)
+        action_names.append("steer_right")
+    if keyboard.is_pressed("w"):
+        gamepad.left_joystick(x_value=0, y_value=20000)
+        action_names.append("up")
+    if keyboard.is_pressed("s"):
+        gamepad.left_joystick(x_value=0, y_value=-20000)
+        action_names.append("down")
+    if keyboard.is_pressed("space"):
+        gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_X)
+        action_names.append("button_x")
+
+    return ",".join(action_names) if action_names else "neutral"
 
 
 def resolve_model_path(model_path):
@@ -72,6 +125,8 @@ def resolve_model_path(model_path):
 def run_realtime_game(model_path, majority_vote=config.MAJORITY_VOTE_WINDOW, delay=config.DELAY_BETWEEN_PREDICTIONS, use_filter=config.USE_FILTERS, confidence_threshold=0.60):
     if vg is None:
         raise ImportError("vgamepad is not installed. Run '.\\.venv\\Scripts\\python.exe -m pip install -r requirements.txt'.")
+    if keyboard is None:
+        raise ImportError("keyboard is not installed. Run '.\\.venv\\Scripts\\python.exe -m pip install -r requirements.txt'.")
 
     if majority_vote is None:
         majority_vote = config.MAJORITY_VOTE_WINDOW
@@ -132,6 +187,10 @@ def run_realtime_game(model_path, majority_vote=config.MAJORITY_VOTE_WINDOW, del
     )
     gamepad = vg.VX360Gamepad()
     print("[bridge] Virtual gamepad created")
+    mode = "keyboard"
+    last_prediction = 2
+    last_confidence = 0.0
+    last_mode_printed = None
 
     try:
         odh.reset()
@@ -140,12 +199,25 @@ def run_realtime_game(model_path, majority_vote=config.MAJORITY_VOTE_WINDOW, del
 
     print("[bridge] Starting EMG classifier loop")
     print("[bridge] Press Ctrl+C to stop")
+    print("[bridge] Controls: O=drive mode, P=keyboard mode, Q=quit")
 
     try:
         oclassi.run(block=False)
         print("[bridge] Classifier running in non-blocking mode")
         while True:
             gamepad.reset()
+
+            if keyboard.is_pressed("q"):
+                print("[bridge] Quit requested from keyboard")
+                break
+            if keyboard.is_pressed("o"):
+                mode = "drive"
+            elif keyboard.is_pressed("p"):
+                mode = "keyboard"
+
+            if mode != last_mode_printed:
+                print(f"[bridge] Mode switched to {mode}")
+                last_mode_printed = mode
 
             data = controller.get_data(["probabilities", "timestamp"])
             if data is not None:
@@ -154,17 +226,25 @@ def run_realtime_game(model_path, majority_vote=config.MAJORITY_VOTE_WINDOW, del
                 pred_idx = int(np.argmax(probs))
                 confidence = float(np.max(probs))
                 label = map_class_label(pred_idx)
-                action_name = "neutral"
-
                 if confidence >= confidence_threshold:
-                    action_name = apply_action(gamepad, label)
+                    last_prediction = pred_idx
+                    last_confidence = confidence
+
+                if mode == "drive":
+                    action_name = apply_drive_action(gamepad, last_prediction)
+                elif mode == "keyboard":
+                    action_name = apply_keyboard_action(gamepad)
 
                 print(
-                    f"[bridge] t={float(timestamp):.3f} pred_idx={pred_idx} mapped_label={label} action={action_name} confidence={confidence:.3f}"
+                    f"[bridge] t={float(timestamp):.3f} mode={mode} pred_idx={pred_idx} mapped_label={label} active_prediction={last_prediction} action={action_name} confidence={confidence:.3f} last_confidence={last_confidence:.3f}"
                 )
             else:
-                print("[bridge] No prediction available yet", flush=True)
-                time.sleep(max(delay, 0.1))
+                if mode == "drive":
+                    action_name = apply_drive_action(gamepad, last_prediction)
+                elif mode == "keyboard":
+                    action_name = apply_keyboard_action(gamepad)
+
+                print(f"[bridge] No prediction available yet mode={mode} action={action_name}", flush=True)
                 gamepad.update()
                 continue
 
