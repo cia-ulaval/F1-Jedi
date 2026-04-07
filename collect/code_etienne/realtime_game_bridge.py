@@ -246,6 +246,7 @@ def run_realtime_game(model_path, majority_vote=config.MAJORITY_VOTE_WINDOW, del
 
                 print(f"[bridge] No prediction available yet mode={mode} action={action_name}", flush=True)
                 gamepad.update()
+                time.sleep(max(delay, 0.1))
                 continue
 
             gamepad.update()
