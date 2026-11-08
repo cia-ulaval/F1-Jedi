@@ -51,6 +51,7 @@ except ImportError:
 #         gamepad.left_joystick(x_value=20000, y_value=0)
 #
 #     return action_name
+#kader
 
 
 def apply_drive_action(gamepad, prediction_idx):
