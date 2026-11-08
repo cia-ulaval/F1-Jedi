@@ -18,7 +18,7 @@ class Config:
         self.TEST_REPS = [3,6]
         
         # realtime testing
-        self.MAJORITY_VOTE_WINDOW = 40  # Number of samples for majority vote (set to 1 to disable)
+        self.MAJORITY_VOTE_WINDOW = 30  # Number of samples for majority vote (set to 1 to disable)
         self.DELAY_BETWEEN_PREDICTIONS = 0.02  # seconds
         self.USE_FILTERS = True  # Set to False to disable online filters
         self.TIMEOUT = 10.0  # seconds

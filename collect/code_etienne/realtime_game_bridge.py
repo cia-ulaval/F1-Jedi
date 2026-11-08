@@ -38,19 +38,19 @@ except ImportError:
     keyboard = None
 
 
-def apply_action(gamepad, label):
-    action_name, action_code = GAME_ACTIONS.get(label, ("neutral", "none"))
-
-    if action_code == "right_trigger":
-        gamepad.right_trigger(value=255)
-    elif action_code == "left_trigger":
-        gamepad.left_trigger(value=255)
-    elif action_code == "left_joystick_negative":
-        gamepad.left_joystick(x_value=-20000, y_value=0)
-    elif action_code == "left_joystick_positive":
-        gamepad.left_joystick(x_value=20000, y_value=0)
-
-    return action_name
+# def apply_action(gamepad, label):
+#     action_name, action_code = GAME_ACTIONS.get(label, ("neutral", "none"))
+#
+#     if action_code == "right_trigger":
+#         gamepad.right_trigger(value=255)
+#     elif action_code == "left_trigger":
+#         gamepad.left_trigger(value=255)
+#     elif action_code == "left_joystick_negative":
+#         gamepad.left_joystick(x_value=-20000, y_value=0)
+#     elif action_code == "left_joystick_positive":
+#         gamepad.left_joystick(x_value=20000, y_value=0)
+#
+#     return action_name
 
 
 def apply_drive_action(gamepad, prediction_idx):
@@ -58,9 +58,10 @@ def apply_drive_action(gamepad, prediction_idx):
     gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
 
     if prediction_idx == 0:  # Hand_Open
-        return "accelerate_only"
-    if prediction_idx == 1:  # Hand_Close
         gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_B)
+        return "button_b"
+    if prediction_idx == 1:  # Hand_Close
+        #gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_B)
         return "button_b"
     if prediction_idx == 2:  # No_Motion
         return "neutral"
@@ -76,22 +77,22 @@ def apply_drive_action(gamepad, prediction_idx):
 def apply_keyboard_action(gamepad):
     action_names = []
 
-    if keyboard.is_pressed("z"):
+    if keyboard.is_pressed("v"):
         gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
         action_names.append("button_a")
-    if keyboard.is_pressed("x"):
+    if keyboard.is_pressed("b"):
         gamepad.press_button(button=vg.XUSB_BUTTON.XUSB_GAMEPAD_B)
         action_names.append("button_b")
-    if keyboard.is_pressed("a"):
+    if keyboard.is_pressed("g"):
         gamepad.left_joystick(x_value=-20000, y_value=0)
         action_names.append("steer_left")
-    if keyboard.is_pressed("d"):
+    if keyboard.is_pressed("j"):
         gamepad.left_joystick(x_value=20000, y_value=0)
         action_names.append("steer_right")
-    if keyboard.is_pressed("w"):
+    if keyboard.is_pressed("y"):
         gamepad.left_joystick(x_value=0, y_value=20000)
         action_names.append("up")
-    if keyboard.is_pressed("s"):
+    if keyboard.is_pressed("h"):
         gamepad.left_joystick(x_value=0, y_value=-20000)
         action_names.append("down")
     if keyboard.is_pressed("space"):
@@ -127,7 +128,7 @@ def run_realtime_game(model_path, majority_vote=config.MAJORITY_VOTE_WINDOW, del
         raise ImportError("vgamepad is not installed. Run '.\\.venv\\Scripts\\python.exe -m pip install -r requirements.txt'.")
     if keyboard is None:
         raise ImportError("keyboard is not installed. Run '.\\.venv\\Scripts\\python.exe -m pip install -r requirements.txt'.")
-
+o
     if majority_vote is None:
         majority_vote = config.MAJORITY_VOTE_WINDOW
     if delay is None:
