@@ -25,3 +25,7 @@ Thumbs.db
 pyproject.toml
 uv.lock
 
+
+# Modèles téléchargés
+*.pt
+*.task
