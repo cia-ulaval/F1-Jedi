@@ -1,0 +1,56 @@
+{
+  "labels": [
+    "No_Motion",
+    "Hand_Close",
+    "Hand_Open",
+    "Wrist_Flexion",
+    "Wrist_Extension"
+  ],
+  "report": "                 precision    recall  f1-score   support\n\n      No_Motion       0.95      1.00      0.98       176\n     Hand_Close       0.88      1.00      0.94       130\n      Hand_Open       1.00      0.80      0.89       118\n  Wrist_Flexion       1.00      0.82      0.90       153\nWrist_Extension       0.82      0.98      0.89       128\n\n       accuracy                           0.92       705\n      macro avg       0.93      0.92      0.92       705\n   weighted avg       0.93      0.92      0.92       705\n",
+  "confusion_matrix": [
+    [
+      176,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      130,
+      0,
+      0,
+      0
+    ],
+    [
+      7,
+      17,
+      94,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      125,
+      28
+    ],
+    [
+      2,
+      0,
+      0,
+      0,
+      126
+    ]
+  ],
+  "train_samples": 960,
+  "test_samples": 705,
+  "train_sessions": [
+    "678092251fcc48eb8c7db368a81aedcb",
+    "8e6241db8aec4dacb63e1b12f375f064"
+  ],
+  "test_sessions": [
+    "249a09b6e7244344968305709c7619de"
+  ]
+}
