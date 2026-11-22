@@ -13,6 +13,9 @@ venv/
 .vscode/
 
 # Project-generated data
+images/sgt_3_gestes/
+dataset/*_archive_*/
+.pytest_cache/
 
 # Local binaries
 *.exe
@@ -20,3 +23,8 @@ venv/
 # OS files
 .DS_Store
 Thumbs.db
+
+.python-version
+pyproject.toml
+uv.lock
+

@@ -1,70 +1,77 @@
-# Protocole De Collecte EMG
+# Protocole de collecte EMG (3 gestes)
 
 ## Objectif
-Construire un dataset offline propre pour entrainer et valider les modeles EMG entre sessions.
+Enregistrer une session propre, entrainer le modele a 3 gestes, puis jouer.
 
-## Ordre recommande
-1. Collecter `S01`
-2. Collecter `S02`
-3. Collecter `S03`
-4. Entrainer avec `collect/code_etienne/trainning_etienne.py`
-5. Valider en temps reel avec `collect/code_etienne/realtime_test_etienne.py`
+## Les 3 gestes
+| Geste | Role en jeu | Pourquoi |
+|-------|-------------|----------|
+| `No_Motion` | tout droit | main detendue |
+| `Hand_Close` | gauche | poing ferme, contraction moyenne |
+| `Wrist_Extension` | droite | poignet releve, contraction forte |
 
-## Avant Chaque Session
-- Positionner le capteur toujours au meme endroit.
-- Garder la meme main, la meme posture du bras et du poignet.
-- Verifier que le signal EMG arrive bien avant de commencer.
-- Faire une courte contraction de test pour voir si le capteur reagit.
+Le BioPoint n'a qu'un canal EMG. Sur les sessions S1 et S2, `Wrist_Flexion` a le meme
+niveau que le repos et `Hand_Open` change trop d'une session a l'autre : ils ne sont plus
+utilises. Les anciennes sessions a 5 gestes restent lisibles, le script n'en garde que les
+3 gestes ci-dessus.
 
-## Pendant La Collecte
-- Garder chaque geste stable pendant toute la pose.
-- Eviter les mouvements parasites du bras, de l'epaule et du tronc.
+## Avant chaque session
+- Capteur toujours au meme endroit et sur le meme bras. Bonne position : celle ou
+  `Wrist_Extension` donne un signal nettement plus fort que le repos (verifier avec
+  realtime_test_etienne.py, colonne rms).
+- Peau propre et seche. Attendre 1 a 2 minutes apres la pose : le contact se stabilise
+  quand la peau se rechauffe sous l'electrode.
+- Meme posture du bras qu'en jeu.
+
+## Pendant la collecte
+- Tenir chaque geste stable pendant toute la pose, avec la force utilisee en jeu
+  (moderee : une contraction maximale fatigue vite et ne ressemble pas au jeu).
 - Relacher completement pendant les pauses.
-- Si un geste est rate, supprimer le dossier du sujet et recommencer proprement.
-
-## Gestes
-- `Hand_Open`
-- `Hand_Close`
-- `No_Motion`
-- `Wrist_Extension`
-- `Wrist_Flexion`
+- Si une repetition est ratee, utiliser le bouton "Redo" du GUI.
 
 ## Commandes
-Collecte avec le script courant:
-
 ```powershell
-.\.venv\Scripts\python.exe .\collect\code_etienne\collect_etienne.py
+# 1. Collecte (3 gestes x 7 repetitions de 5 s, environ 3 minutes)
+python .\collect\code_etienne\collect_etienne.py --session 3
+
+# 2. Entrainement + evaluation (train reps 2,0,4,1,5 ; test reps 3,6 par defaut)
+python .\collect\code_etienne\trainning_etienne.py --sessions 3
+
+# Variantes
+python .\collect\code_etienne\trainning_etienne.py --sessions 3 --train-reps 0,1,2,3,4 --test-reps 5,6
+python .\collect\code_etienne\trainning_etienne.py --sessions 1,2,3            # plusieurs sessions
+python .\collect\code_etienne\trainning_etienne.py --sessions 2 --test-sessions 3   # test inter-session
+
+# 3. Test temps reel (dernier modele charge automatiquement)
+python .\collect\code_etienne\realtime_test_etienne.py
+
+# 4. Jeu
+python .\collect\game.py
 ```
 
-Entrainement sur `S1` avec 5 repetitions pour train et 2 pour test:
-
+Sans capteur :
 ```powershell
-.\.venv\Scripts\python.exe .\collect\code_etienne\trainning_etienne.py --session 1 --train-reps 2,0,4,1,5 --test-reps 3,6
+python .\collect\code_etienne\realtime_test_etienne.py --replay 2
+python -m pytest .\collect\code_etienne\tests -q
 ```
 
-Autre exemple avec un split different dans la meme session:
+## Lire le resultat de l'entrainement
+- "Exactitude temps reel simule" : les repetitions de test rejouees dans le decodeur du
+  jeu. Viser 95 % ou plus. Sous 90 %, replacer le capteur et recollecter.
+- "rapport" repos/actif : viser 5x ou plus. Un rapport faible veut dire que le capteur
+  n'est pas sur le bon muscle ou que les gestes sont trop mous.
 
-```powershell
-.\.venv\Scripts\python.exe .\collect\code_etienne\trainning_etienne.py --session 1 --train-reps 0,1,2,3,4 --test-reps 5,6
-```
+## Quand le decodage se degrade en jeu
+Au bout de quelques minutes, la sueur, la temperature de la peau et la fatigue changent le
+signal. Le decodeur suit ces changements tout seul (niveau de repos, amplitude, spectre).
+Si ca ne suffit plus :
+1. Appuyer sur `R` dans le pont de jeu : recalibration guidee de 15 s (repos, puis chaque
+   geste 3 s). La manette est relachee pendant ce temps.
+2. Si la recalibration est refusee ou ne suffit pas : essuyer la peau, replacer le capteur,
+   refaire une collecte courte.
 
-Test temps reel avec le dernier modele sauvegarde:
-
-```powershell
-.\.venv\Scripts\python.exe .\collect\code_etienne\realtime_test_etienne.py
-```
-
-Test temps reel avec un modele explicite:
-
-```powershell
-.\.venv\Scripts\python.exe .\collect\code_etienne\realtime_test_etienne.py --model_path .\models\libemg_lda_S1_20260404_015612.pkl
-```
-
-Notes:
-- Le workflow courant utilise les scripts dans `collect/code_etienne`.
-- Les 5 classes sont conservees pour l'entrainement.
-- Les options `--train-reps` et `--test-reps` servent a choisir quelles repetitions d'une session vont au train et au test.
-- Si aucune repetition n'est fournie, le script prend les valeurs definies dans `config.py`.
-
-## Regle Pratique
-Ne passez pas au temps reel tant que la validation par session n'est pas suffisamment stable sur plusieurs collectes.
+## Reglages (collect/code_etienne/config.py)
+- `GESTURES`, `GAME_ACTIONS` : gestes et actions de jeu (inverser gauche/droite ici).
+- `VOTE_WINDOW` : 9 fenetres (180 ms). Plus grand = plus stable mais plus lent.
+- `ADAPT` : suivi de derive (laisser a True).
+- `NOTCH` : 60 Hz en Amerique du Nord.

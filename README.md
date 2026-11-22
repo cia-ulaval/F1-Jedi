@@ -11,7 +11,7 @@ Take control of a miniature racing car using only hand gestures! This project ut
 - **Gesture Recognition**: Maps hand movements to car controls.
 - **Simulation Phase**: Testing in TrackMania + Pynput or vGamepad before real-world deployment.
 - **Real-World Phase**: Controlling a physical **F1 Tenth** car.
-- **Pynput Keyboard Simulation**: Sends EMG-based commands to the simulator.
+- **Virtual Gamepad**: Sends EMG-based commands to the simulator through vGamepad.
 
 ## 🏗️ Project Pipeline
 1. **Data Acquisition**: Collect EMG signals from the bracelet.
@@ -31,11 +31,10 @@ Take control of a miniature racing car using only hand gestures! This project ut
 
 ## 🚀 Getting Started
 ### Prerequisites
-- Python 3.8+
+- Python 3.10+
+- Windows for the game bridge (vgamepad needs the ViGEmBus driver)
 - TrackMania
-- Pynput Library (`pip install pynput`)
-- vGamepad Library(`pip install vgamepad`)
-- EMG Sensor library (libEMG)
+- SiFi Labs BioPoint (one EMG channel, 2000 Hz), read through libEMG
 
 ### Installation
 ```bash
@@ -47,48 +46,62 @@ cd F1-team-1
 pip install -r requirements.txt
 ```
 
-### Running the Simulation
-```bash
-python main.py
-```
+### Current EMG Workflow (3 gestures)
+The BioPoint has a single EMG channel. With five gestures the decoder degraded within
+minutes (skin temperature, sweat, muscle fatigue), so the pipeline now uses **three
+gestures**: `No_Motion`, `Hand_Close`, `Wrist_Extension`. On the recorded sessions,
+`Wrist_Flexion` has the same amplitude as rest and `Hand_Open` changes too much from one
+session to the next, so these two were dropped.
 
-### Current EMG Workflow
 ```bash
-# Activate the project virtual environment
+# Activate the project virtual environment (Windows)
 .\.venv\Scripts\Activate.ps1
 
-# Collect one session
-python .\collect\code_etienne\collect_etienne.py
+# 1. Collect one session (3 gestures x 7 repetitions, about 3 minutes)
+python .\collect\code_etienne\collect_etienne.py --session 3
 
-# Train on a given session with explicit train/test repetitions
-python .\collect\code_etienne\trainning_etienne.py --session 1 --train-reps 2,0,4,1,5 --test-reps 3,6
+# 2. Train and evaluate on that session
+python .\collect\code_etienne\trainning_etienne.py --sessions 3
 
-# Run real-time inference with the latest saved model for the selected session
+# 3. Check the decoder in the console (latest model is loaded automatically)
 python .\collect\code_etienne\realtime_test_etienne.py
+
+# 4. Drive the game through the virtual gamepad
+python .\collect\game.py
 ```
 
-Notes:
-- The current workflow uses the scripts in `collect/code_etienne/`.
-- `trainning_etienne.py` keeps the 5 gesture classes and lets you choose the dataset session plus the train/test repetitions at launch time.
-- `realtime_test_etienne.py` loads the latest saved model automatically if no `--model_path` is provided.
+No sensor at hand? Replay a recorded session through the real-time loop, or run the tests:
 
-## 🎮 Controls for discrete actions (Mapped from EMG Signals) with pynput
+```bash
+python .\collect\code_etienne\realtime_test_etienne.py --replay 2
+python -m pytest .\collect\code_etienne\tests -q
+```
+
+How the decoder works (`collect/code_etienne/emg_core.py`):
+- **Stage 1, rest vs active**: window amplitude against a threshold placed between the rest
+  level and the active level. The rest level is measured at start-up and tracked
+  continuously, so the threshold follows the sensor.
+- **Stage 2, which gesture**: LDA on normalized autocorrelation features. They do not depend
+  on signal amplitude, so contraction strength and electrode gain do not change them.
+- **Smoothing**: hysteresis plus a majority vote over 9 windows (about 180 ms).
+- **Drift**: slow tracking of rest noise, amplitude and spectral shift, plus a 15-second
+  recalibration (key `R` in the game bridge) when decoding degrades.
+
+All settings live in `collect/code_etienne/config.py`. See `collect/COLLECT_PROTOCOL.md`
+for the collection protocol.
+
+## 🎮 Controls (drive mode, virtual Xbox 360 gamepad)
 | Gesture | Action |
 |---------|--------|
-| Thumb Flexion | Accelerate (Key: `W`) or (Key: `up` |
-| Wrist Rotation Left | Turn Left (Key: `A` or (Key: `left`) |
-| Wrist Rotation Right | Turn Right (Key: `D` or (Key: `right`) |
-| Relaxed Hand | Brake (Key: `S`) or (Key: `down` |
+| `No_Motion` (relaxed hand) | Straight, accelerator held (button `A`) |
+| `Hand_Close` | Steer left, accelerator held |
+| `Wrist_Extension` | Steer right, accelerator held |
 
-## 🎮 Controls for continuous actions (Mapped from EMG Signals) with vgamepad
-| Gesture | Action |
-|---------|--------|
-| Thumb Flexion | vgamepad.VX360Gamepad().right_trigger(255) |
-| Wrist Rotation Left | vgamepad.VX360Gamepad().left_joystick(x_value=-32768, y_value=0) |
-| Wrist Rotation Right | vgamepad.VX360Gamepad().left_joystick(x_value=+32768, y_value=0) |
-| Relaxed Hand | vgamepad.VX360Gamepad().left_trigger(255)|
+The mapping is `GAME_ACTIONS` in `config.py` (swap left/right there, or use `brake`).
 
-
+Keyboard keys while the bridge runs: `O` drive mode, `P` manual keyboard mode
+(`V` = A, `B` = B, `G`/`J` = left/right, `Y`/`H` = up/down, `Space` = X), `R` quick
+recalibration, `Q` quit. The gamepad is released if the sensor stops sending data.
 
 ## 📢 Future Enhancements
 - Improve gesture detection using **machine learning**.

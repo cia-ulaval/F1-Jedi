@@ -1,6 +1,16 @@
-libemg 
+# Pipeline EMG 3 gestes (collect/code_etienne)
+libemg
 sifi_bridge_py
 numpy
+
+# Pont de jeu (Windows + pilote ViGEmBus)
+vgamepad; platform_system == "Windows"
+keyboard
+
+# Tests hors ligne
+pytest
+
+# Anciens scripts (collect/older)
 matplotlib
 joblib
 scikit-learn
