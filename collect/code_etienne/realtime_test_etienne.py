@@ -131,23 +131,29 @@ class ReplayReader:
     def reset(self):
         self._start = time.perf_counter()
         self._next_count = self.window_size
+        self._last_end = self.window_size
 
     def _position(self):
         return int((time.perf_counter() - self._start) * self.fs * self.speed)
 
     @property
     def finished(self):
-        return self._position() >= len(self.signal)
+        return self._next_count > len(self.signal)
 
     def current_truth(self):
-        return int(self.truth[min(self._position(), len(self.truth) - 1)])
+        """Verite terrain a la fin de la derniere fenetre rendue."""
+        return int(self.truth[min(self._last_end, len(self.truth)) - 1])
 
     def poll(self):
+        # Toutes les fenetres sont rendues dans l'ordre, pas de window_inc
+        # exact, meme en replay accelere (sinon le decodeur en saute).
         position = min(self._position(), len(self.signal))
         if position < self._next_count:
             return None
-        self._next_count = position + self.window_inc
-        return self.signal[position - self.window_size:position]
+        end = self._next_count
+        self._next_count += self.window_inc
+        self._last_end = end
+        return self.signal[end - self.window_size:end]
 
     collect = WindowReader.collect
 

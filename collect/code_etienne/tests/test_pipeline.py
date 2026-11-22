@@ -273,3 +273,19 @@ def test_stop_streamer_kills_tree_when_sensor_is_silent(monkeypatch):
     ce.stop_streamer(streamer, timeout_s=0.01)
     assert calls == [["taskkill", "/F", "/T", "/PID", "4242"]]
     assert ce._ACTIVE_STREAMERS == []
+
+
+def test_replay_reader_yields_every_window_even_when_accelerated(monkeypatch):
+    # Bug : a vitesse x20, ReplayReader sautait ~4 fenetres sur 5 et notait la
+    # sortie contre la verite du moment present (85.9 % au lieu de 94.0 % en x1).
+    clock = {"t": 0.0}
+    monkeypatch.setattr(rt.time, "perf_counter", lambda: clock["t"])
+    reader = rt.ReplayReader(2, config.GESTURES, config.WINDOW_SIZE, config.WINDOW_INC, config.EMG_FS, speed=20.0)
+    clock["t"] = 1.0                                       # 40 000 echantillons d'un coup
+    ends = []
+    while (window := reader.poll()) is not None:
+        ends.append(reader._last_end)
+        assert np.array_equal(window, reader.signal[reader._last_end - config.WINDOW_SIZE:reader._last_end])
+        assert reader.current_truth() == reader.truth[reader._last_end - 1]
+    assert np.all(np.diff(ends) == config.WINDOW_INC)
+    assert ends[-1] == 40000
