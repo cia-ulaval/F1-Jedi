@@ -289,3 +289,15 @@ def test_replay_reader_yields_every_window_even_when_accelerated(monkeypatch):
         assert reader.current_truth() == reader.truth[reader._last_end - 1]
     assert np.all(np.diff(ends) == config.WINDOW_INC)
     assert ends[-1] == 40000
+
+
+@pytest.mark.parametrize("script", sorted((CODE_DIR / "live").glob("live_*.py")))
+def test_live_scripts_start_from_repo_root(script):
+    # Bug : un import place avant live_common faisait planter le script lance
+    # comme l'utilisateur le fait (python .\collect\code_etienne\live\...).
+    import subprocess
+    if script.name == "live_common.py":
+        pytest.skip("module, pas un script")
+    result = subprocess.run([sys.executable, str(script), "--help"], cwd=config.REPO_ROOT,
+                            capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr

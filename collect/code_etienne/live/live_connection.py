@@ -16,8 +16,8 @@ import time
 
 import numpy as np
 
-from emg_core import frame_signal
 from live_common import NO_CUE, Cue, Sensor, config, new_run_dir, run_for, save_json, say
+from emg_core import frame_signal  # apres live_common, qui ajoute code_etienne au chemin
 
 
 def scan(timeout_s=10.0):
