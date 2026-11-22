@@ -19,7 +19,9 @@ from emg_core import ThreeGestureModel, extract_features, frame_signal, noise_pr
 
 SKIP_S = 0.5            # debut de chaque pose ignore (le geste s'installe)
 TARGET_REST_UV = 15.0
-TARGET_RATIO = 5.0
+TARGET_RATIO = 5.0      # repere ; la decision se fait sur le decodeur rejoue
+TARGET_REPLAY = 0.95    # temps reel simule, un tour laisse de cote
+TARGET_ABOVE = 0.95     # part des fenetres du geste le plus faible au-dessus du seuil
 
 
 def segments(tape):
@@ -107,12 +109,51 @@ def analyse(tape):
             acc.append(float(np.mean(pred == label)) if keep.any() else None)
         result["latest_model"] = {"path": str(path), "stage2_accuracy_per_gesture": acc}
 
+    result["decoder"] = decoder_check(tape)
+
     ok_rest = levels[0] < TARGET_REST_UV
     ok_ratio = all(result["gestures"][names[l]]["ratio_vs_rest"] >= TARGET_RATIO for l in (1, 2))
     ok_sep = result["stage2_cv_accuracy"] is not None and result["stage2_cv_accuracy"] >= 0.90
-    result["targets"] = {"rest_below_15uV": ok_rest, "ratio_at_least_5x": ok_ratio, "stage2_separable_90pct": ok_sep}
-    result["ready_to_collect"] = bool(ok_rest and ok_ratio and ok_sep)
+    dec = result["decoder"]
+    ok_decoder = dec["replay_accuracy"] >= TARGET_REPLAY and dec["weakest_above_threshold"] >= TARGET_ABOVE
+    result["targets"] = {"rest_below_15uV": ok_rest, "ratio_at_least_5x": ok_ratio, "stage2_separable_90pct": ok_sep,
+                         "decoder_replay_95pct": ok_decoder}
+    # Le rapport 5x est un repere. Ce qui decide : le decodeur reel rejoue sur
+    # ces poses (mesure : Hand_Close a 4.0x -> 99.6 % en temps reel simule).
+    result["ready_to_collect"] = bool(ok_rest and ok_sep and ok_decoder)
     return result
+
+
+def decoder_check(tape):
+    """Le decodeur du jeu, entraine sur tous les tours sauf un, teste sur celui-la."""
+    import trainning_etienne as tr
+    recs, count = [], {0: 0, 1: 0, 2: 0}
+    for seg in segments(tape):
+        if seg["phase"] == "hold" and seg["label"] in count:
+            recs.append({"label": seg["label"], "rep": count[seg["label"]], "session": 0,
+                         "signal": tape["emg"][seg["start"]:seg["end"]]})
+            count[seg["label"]] += 1
+    n_rounds = min(count.values())
+    confusion = np.zeros((3, 3), dtype=int)
+    above = {1: [], 2: []}
+    for k in range(n_rounds):
+        try:
+            model = tr.fit_model([r for r in recs if r["rep"] != k])
+        except ValueError as error:
+            say(f"  (decodeur non entrainable sans le tour {k + 1} : {error})")
+            continue
+        thr_on, _ = model.thresholds(model.rest_level, model.active_level, model.on_frac, model.off_frac)
+        for rec in recs:
+            if rec["rep"] == k and rec["label"] in above:
+                skip = int(SKIP_S * config.EMG_FS)
+                log_rms, _ = extract_features(frame_signal(rec["signal"][skip:], config.WINDOW_SIZE, config.WINDOW_INC),
+                                              config.N_LAGS)
+                above[rec["label"]].append(float(np.mean(log_rms > thr_on)))
+        confusion += tr.replay_accuracy(model, [r for r in recs if r["rep"] == k])
+    total = max(confusion.sum(), 1)
+    frac = {config.GESTURES[l]: float(np.mean(v)) if v else 0.0 for l, v in above.items()}
+    return {"replay_accuracy": float(np.trace(confusion) / total), "confusion": confusion.tolist(),
+            "above_threshold": frac, "weakest_above_threshold": min(frac.values())}
 
 
 def _fit(held, noise):
@@ -152,11 +193,21 @@ def report(result):
         f"{'n/a' if cv is None else f'{cv:.1%}'}  {['%.0f%%' % (100 * a) for a in result['stage2_cv_accuracy_per_round']]}")
     if "stage2_fisher" in result:
         say(f"  Separation de Fisher (ecart/dispersion du score LDA) : {result['stage2_fisher']:.2f}  (> 2 = bien separe)")
+    dec = result["decoder"]
+    above = ", ".join(f"{name} {value:.0%}" for name, value in dec["above_threshold"].items())
+    say(f"  Decodeur du jeu rejoue (un tour laisse de cote) : {dec['replay_accuracy']:.1%} ; "
+        f"fenetres au-dessus du seuil : {above}")
     if "latest_model" in result:
         acc = result["latest_model"]["stage2_accuracy_per_gesture"]
-        say(f"  Ancien modele sur ces gestes : Hand_Close {acc[0]:.0%}, Wrist_Extension {acc[1]:.0%}")
+        say(f"  (Dernier modele sauvegarde, peut-etre d'une autre personne : "
+            f"Hand_Close {acc[0]:.0%}, Wrist_Extension {acc[1]:.0%})")
     say(f"  Cibles : {result['targets']}")
-    say("  => PRET pour la collecte" if result["ready_to_collect"] else "  => PAS PRET : deplacer le capteur et refaire")
+    if result["ready_to_collect"]:
+        weak = [n for n, i in result["gestures"].items() if i.get("ratio_vs_rest", 99) < TARGET_RATIO]
+        note = f" (rapport < 5x pour {', '.join(weak)}, mais le decodeur le detecte bien)" if weak else ""
+        say("  => PRET pour la collecte" + note)
+    else:
+        say("  => PAS PRET : deplacer le capteur (ou renforcer le geste faible) et refaire")
 
 
 def record(rounds, hold_s, rest_s, gap_s, device):
