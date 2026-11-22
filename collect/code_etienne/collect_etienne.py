@@ -50,6 +50,17 @@ def _stop_all_streamers():
         stop_streamer(streamer)
 
 
+def _start_streamer(shared_memory_items, streaming):
+    # Streamer libemg dont l'arret ne met pas le BioPoint en veille profonde
+    # (sinon il faut appuyer sur son bouton avant chaque lancement).
+    try:
+        from sifi_streamer import start_biopoint_streamer
+    except ImportError:
+        from code_etienne.sifi_streamer import start_biopoint_streamer
+    return start_biopoint_streamer(config.DEVICE_NAME, shared_memory_items, config.NOTCH, streaming=streaming,
+                                   deep_sleep_on_exit=config.SLEEP_SENSOR_ON_EXIT)
+
+
 def prepare_streamer(streaming=False, return_streamer=False):
     """Demarre le flux EMG du BioPoint et retourne l'OnlineDataHandler.
 
@@ -68,18 +79,7 @@ def prepare_streamer(streaming=False, return_streamer=False):
         ["emg", (config.EMG_FS, 1), np.double],
         ["emg_count", (1, 1), np.int32],
     ]
-    streamer, smi = libemg.streamers.sifi_biopoint_streamer(
-        name=config.DEVICE_NAME,
-        shared_memory_items=shared_memory_items,
-        ecg=False,
-        emg=True,
-        eda=False,
-        imu=False,
-        ppg=False,
-        filtering=True,
-        emg_notch_freq=config.NOTCH,
-        streaming=streaming,
-    )
+    streamer, smi = _start_streamer(shared_memory_items, streaming)
     if not _ACTIVE_STREAMERS:
         # Enregistre APRES l'import de multiprocessing (par libemg) : atexit
         # est LIFO, donc cet arret propre passe avant que multiprocessing tue

@@ -80,6 +80,9 @@ class Config:
         self.EMG_FS = 2000
         self.NOTCH = 60                 # filtre coupe-bande du BioPoint (50 en Europe)
         self.DEVICE_NAME = "BioPoint_v1_3"
+        # Veille profonde a l'arret (economise la batterie) : il faut ensuite appuyer
+        # sur le bouton du BioPoint pour le reconnecter. False pendant les tests.
+        self.SLEEP_SENSOR_ON_EXIT = False
 
     @property
     def WINDOW_SIZE(self):

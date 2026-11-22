@@ -238,10 +238,10 @@ def test_prepare_streamer_keeps_handle_and_stop_is_clean(monkeypatch):
 
     streamer = FakeStreamer(stops_on_signal=True)
     fake_libemg = types.SimpleNamespace(
-        streamers=types.SimpleNamespace(sifi_biopoint_streamer=lambda **kwargs: (streamer, kwargs["shared_memory_items"])),
         data_handler=types.SimpleNamespace(OnlineDataHandler=lambda shared_memory_items: "odh"),
     )
     monkeypatch.setitem(sys.modules, "libemg", fake_libemg)
+    monkeypatch.setattr(ce, "_start_streamer", lambda items, streaming: (streamer, items))
     monkeypatch.setattr(ce, "_ACTIVE_STREAMERS", [])
     calls = []
     monkeypatch.setattr(ce.subprocess, "run", lambda *a, **k: calls.append(a))
@@ -301,3 +301,30 @@ def test_live_scripts_start_from_repo_root(script):
     result = subprocess.run([sys.executable, str(script), "--help"], cwd=config.REPO_ROOT,
                             capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
+
+
+def test_streamer_cleanup_skips_deep_sleep_and_always_kills_bridge():
+    # Mesure sur capteur : apres le 'deep-sleep' envoye par libemg, le BioPoint
+    # ne se reconnectait plus (6 essais en 30 s). Et le cleanup de libemg
+    # plantait sur disconnect()["connected"] avant de tuer sifibridge.
+    pytest.importorskip("libemg")
+    from sifi_streamer import SiFiStreamerNoSleep
+
+    calls = []
+    bridge = types.SimpleNamespace(
+        stop=lambda: calls.append("stop"),
+        send_command=lambda command: calls.append("sleep"),
+        disconnect=lambda: calls.append("disconnect") or False,      # sifi_bridge_py 1.3 : bool
+        _bridge=types.SimpleNamespace(kill=lambda: calls.append("kill")),
+    )
+    streamer = SiFiStreamerNoSleep.__new__(SiFiStreamerNoSleep)
+    streamer.sb = bridge
+    streamer.smm = types.SimpleNamespace(cleanup=lambda: calls.append("smm"))
+    streamer.cleanup()
+    assert calls == ["stop", "disconnect", "kill", "smm"]
+    assert streamer.connected is False
+
+    calls.clear()
+    bridge.disconnect = lambda: (_ for _ in ()).throw(RuntimeError("BLE perdu"))
+    streamer.cleanup()
+    assert calls == ["stop", "kill", "smm"]                           # sifibridge tue quand meme
