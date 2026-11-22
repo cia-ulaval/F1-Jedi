@@ -47,7 +47,10 @@ class Config:
         self.RECALIBRATION_S = 3.0      # duree par geste pour la recalibration (touche R)
         self.DELAY_BETWEEN_PREDICTIONS = 0.005  # periode de scrutation du capteur (s)
         self.STALL_TIMEOUT = 0.5        # sans donnees pendant ce delai -> sortie neutre
-        self.TIMEOUT = 10.0             # attente max du capteur au demarrage (s)
+        # Attente max du premier echantillon. Mesure sur capteur : connexion en
+        # 9-10 s apres l'ouverture de la memoire partagee quand le 1er essai BLE
+        # reussit, plus quand il echoue ("Retrying"). 10 s ne laissait aucune marge.
+        self.TIMEOUT = 30.0
 
         # --------------------------------------------------------------- jeu
         # Action de chaque geste en mode conduite : "straight", "steer_left",

@@ -239,16 +239,18 @@ class Sensor:
         start = time.perf_counter()
         say(f"Connexion au capteur {collect_etienne.config.DEVICE_NAME}...")
         self.streamer, odh = collect_etienne.prepare_streamer(streaming=False, return_streamer=True)
+        self.shared_memory_s = time.perf_counter() - start
         try:
             self.reader = RecordingReader(odh, config.WINDOW_SIZE, config.WINDOW_INC, self.cue)
             if not self.reader.wait_for_emg(self.timeout_s):
-                raise RuntimeError(f"Aucun echantillon EMG apres {self.timeout_s:.0f} s "
-                                   f"(nom du capteur '{collect_etienne.config.DEVICE_NAME}' ?)")
+                raise RuntimeError(f"Aucun echantillon EMG apres {self.timeout_s:.0f} s. Capteur allume (LED) ? "
+                                   f"Sinon appuie sur son bouton pour le reveiller et relance.")
         except BaseException:
             self.__exit__(None, None, None)
             raise
         self.connect_s = time.perf_counter() - start
-        say(f"Capteur connecte en {self.connect_s:.1f} s.")
+        say(f"Capteur connecte en {self.connect_s:.1f} s (memoire partagee {self.shared_memory_s:.1f} s, "
+            f"puis premier echantillon {self.connect_s - self.shared_memory_s:.1f} s ; limite {self.timeout_s:.0f} s).")
         self.reader.reset()
         return self.reader
 
