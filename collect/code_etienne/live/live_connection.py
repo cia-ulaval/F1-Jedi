@@ -39,7 +39,7 @@ def sifibridge_processes():
 
 def analyse(reader, windows):
     reads = np.array(reader.reads)                       # (t, total) a chaque lecture
-    idx, t, emg, _, _ = reader.tape()
+    idx, t, emg = reader.tape()[:3]
     result = {"duration_s": float(reads[-1, 0] - reads[0, 0]) if len(reads) else 0.0,
               "samples": int(len(emg)), "lost_samples": int(reader.lost)}
 

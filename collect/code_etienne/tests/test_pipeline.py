@@ -352,3 +352,48 @@ def test_second_streamer_is_refused_while_sensor_in_use(monkeypatch):
         held.close()
         held.unlink()
     assert not in_use(tag)
+
+
+def follow_the_cue_tape(recordings, order, hold_s=4.0, gap_s=2.0, calib_s=3.5):
+    """Enregistrement 'parfait' : le signal suit les consignes, sans temps de reaction."""
+    fs = config.EMG_FS
+    by_label = {label: [r["signal"] for r in recordings if r["label"] == label] for label in (0, 1, 2)}
+    used = {0: 0, 1: 0, 2: 0}
+
+    def take(label, seconds):
+        rec = by_label[label][used[label] % len(by_label[label])]
+        used[label] += 1
+        return rec[500:500 + int(seconds * fs)]
+
+    parts = [(take(0, calib_s), 0, "calib")]
+    for label in order:
+        parts.append((take(label, hold_s), label, "cue"))
+        parts.append((take(0, gap_s), 0, "gap"))
+    emg = np.concatenate([p[0] for p in parts])
+    cue = np.concatenate([np.full(len(p[0]), p[1]) for p in parts])
+    phase = np.concatenate([np.full(len(p[0]), p[2], dtype=object) for p in parts]).astype(str)
+    n = len(emg)
+    return {"sample": np.arange(n), "t": np.arange(n) / fs, "emg": emg, "cue": cue, "phase": phase,
+            "block": np.zeros(n, dtype=int), "window_ends": None}
+
+
+def test_live_metrics_on_follow_the_cue_replay(recordings):
+    # Valide live_replay + live_metrics : un enregistrement qui suit les
+    # consignes doit donner une exactitude elevee et une latence = decodeur seul.
+    sys.path.insert(0, str(CODE_DIR / "live"))
+    import live_metrics
+    import live_replay
+
+    train = [r for r in recordings[2] if r["rep"] in config.TRAIN_REPS]
+    test = [r for r in recordings[2] if r["rep"] in config.TEST_REPS]
+    order = [1, 0, 2, 2, 1, 0, 1, 2, 0, 1, 2, 0, 2, 1, 0]
+    tape = follow_the_cue_tape(test, order)
+    decoder = OnlineDecoder(tr.fit_model(train), vote_window=config.VOTE_WINDOW, adapt=True)
+    rows = live_replay.replay_rows(tape, decoder)
+    result = live_metrics.analyse(rows, config.GESTURES)
+    assert result["cues"] == {"No_Motion": 5, "Hand_Close": 5, "Wrist_Extension": 5}
+    assert result["accuracy"] > 0.95, result["accuracy"]
+    assert result["latency_median_ms"] < 300, result["latency_median_ms"]
+    assert result["missed_cues"] == {"Hand_Close": 0, "Wrist_Extension": 0}
+    assert result["flicker_during_cues"] <= 2
+    assert result["skipped_window_jumps"] == 0

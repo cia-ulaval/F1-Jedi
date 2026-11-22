@@ -11,6 +11,7 @@ import csv
 import datetime
 import json
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -69,6 +70,7 @@ class Cue:
     def __init__(self):
         self.label = NO_CUE
         self.phase = "setup"
+        self.block = 0           # numero du bloc de test (etape 6 : un bloc toutes les 5 min)
         self.onset = time.perf_counter()
 
     def set(self, label, phase):
@@ -76,13 +78,20 @@ class Cue:
 
 
 def beep(kind="go"):
+    """Bip NON bloquant. winsound.Beep bloque 40-400 ms : pendant ce temps
+    >160 echantillons arrivent et le WindowReader saute des fenetres (mesure
+    au test a blanc : 82 sorties sur 487 differentes du replay)."""
     if winsound is None:
         return
-    try:
-        freq, ms = {"go": (880, 120), "rest": (440, 120), "tick": (660, 40), "end": (330, 400)}[kind]
-        winsound.Beep(freq, ms)
-    except RuntimeError:
-        pass
+    freq, ms = {"go": (880, 120), "rest": (440, 120), "tick": (660, 40), "end": (330, 400)}[kind]
+
+    def play():
+        try:
+            winsound.Beep(freq, ms)
+        except RuntimeError:
+            pass
+
+    threading.Thread(target=play, daemon=True).start()
 
 
 def say(text):
@@ -107,9 +116,10 @@ class RecordingReader(WindowReader):
 
     def _clear_tape(self):
         self._last_total = 0
-        self.chunks = []          # (t_lecture, total, echantillons chronologiques, cue, phase)
+        self.chunks = []          # (t_lecture, total, echantillons chronologiques, cue, phase, bloc)
         self.lost = 0
         self.reads = []           # (t_lecture, total) a chaque lecture : sert a mesurer la regularite
+        self.window_ends = []     # fin (index d'echantillon) de chaque fenetre rendue, pour le replay exact
 
     def reset(self):
         super().reset()
@@ -121,6 +131,7 @@ class RecordingReader(WindowReader):
         if window is not None:
             # Index (depuis le reset) de l'echantillon qui suit la fin de la fenetre.
             self.last_end = self._next_count - self.window_inc
+            self.window_ends.append(self.last_end)
         return window
 
     def _read(self, num_samples):
@@ -135,16 +146,16 @@ class RecordingReader(WindowReader):
                 self.lost += new - len(data)
                 new = len(data)
             fresh = np.asarray(data[:new, 0], dtype=float)[::-1]
-            self.chunks.append((now, total, fresh, self.cue.label, self.cue.phase))
+            self.chunks.append((now, total, fresh, self.cue.label, self.cue.phase, self.cue.block))
             self._last_total = total
         return data[:num_samples], total
 
     # -- export ----------------------------------------------------------
     def tape(self):
-        """Signal continu : (index, t_s, emg_V, cue, phase) par echantillon."""
-        rows_idx, rows_t, rows_v, rows_cue, rows_phase = [], [], [], [], []
+        """Signal continu : (index, t_s, emg_V, cue, phase, bloc) par echantillon."""
+        rows_idx, rows_t, rows_v, rows_cue, rows_phase, rows_block = [], [], [], [], [], []
         fs = float(config.EMG_FS)
-        for t_read, total, fresh, cue, phase in self.chunks:
+        for t_read, total, fresh, cue, phase, block in self.chunks:
             n = len(fresh)
             idx = np.arange(total - n, total)
             # Le dernier echantillon du paquet arrive a peu pres au moment de la lecture.
@@ -153,19 +164,21 @@ class RecordingReader(WindowReader):
             rows_v.append(fresh)
             rows_cue.append(np.full(n, cue))
             rows_phase.extend([phase] * n)
+            rows_block.append(np.full(n, block))
         if not rows_idx:
-            return np.empty(0, int), np.empty(0), np.empty(0), np.empty(0, int), []
+            return np.empty(0, int), np.empty(0), np.empty(0), np.empty(0, int), [], np.empty(0, int)
         return (np.concatenate(rows_idx), np.concatenate(rows_t), np.concatenate(rows_v),
-                np.concatenate(rows_cue), rows_phase)
+                np.concatenate(rows_cue), rows_phase, np.concatenate(rows_block))
 
     def save(self, run_dir):
-        idx, t, v, cue, phase = self.tape()
+        idx, t, v, cue, phase, block = self.tape()
         path = Path(run_dir) / "emg.csv"
         with path.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
-            writer.writerow(["sample", "t_s", "emg_V", "cue", "phase"])
-            for row in zip(idx, t, v, cue, phase):
-                writer.writerow([int(row[0]), f"{row[1]:.6f}", repr(float(row[2])), int(row[3]), row[4]])
+            writer.writerow(["sample", "t_s", "emg_V", "cue", "phase", "block"])
+            for row in zip(idx, t, v, cue, phase, block):
+                writer.writerow([int(row[0]), f"{row[1]:.6f}", repr(float(row[2])), int(row[3]), row[4], int(row[5])])
+        (Path(run_dir) / "windows.txt").write_text(" ".join(str(e) for e in self.window_ends), encoding="utf-8")
         return path
 
 
@@ -180,20 +193,31 @@ def load_tape(run_dir):
         "emg": np.array([float(r["emg_V"]) for r in rows]),
         "cue": np.array([int(r["cue"]) for r in rows]),
         "phase": np.array([r["phase"] for r in rows]),
+        "block": np.array([int(r.get("block") or 0) for r in rows]),   # absent des 1ers enregistrements
+        "window_ends": _load_window_ends(Path(run_dir) / "windows.txt"),
     }
+
+
+def _load_window_ends(path):
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8").split()
+    return np.array([int(v) for v in text], dtype=int)
 
 
 class DecoderLog:
     """Sortie du decodeur a chaque fenetre, avec la consigne du moment."""
 
-    FIELDS = ["t_s", "cue", "phase", "since_cue_s", "label", "raw_label", "rms_uV", "threshold_uV", "rest_uV"]
+    FIELDS = ["t_s", "end_sample", "block", "cue", "phase", "since_cue_s", "label", "raw_label", "rms_uV",
+              "threshold_uV", "rest_uV"]
 
     def __init__(self):
         self.rows = []
 
-    def add(self, t, cue, output):
+    def add(self, t, cue, output, end_sample=-1):
         self.rows.append({
-            "t_s": t, "cue": cue.label, "phase": cue.phase, "since_cue_s": time.perf_counter() - cue.onset,
+            "t_s": t, "end_sample": end_sample, "block": cue.block, "cue": cue.label, "phase": cue.phase,
+            "since_cue_s": time.perf_counter() - cue.onset,
             "label": output["label"], "raw_label": output["raw_label"], "rms_uV": output["rms_uV"],
             "threshold_uV": output["threshold_uV"], "rest_uV": output["rest_uV"],
         })
@@ -211,7 +235,7 @@ def load_decoder_log(path):
     for row in rows:
         for key in ("t_s", "since_cue_s", "rms_uV", "threshold_uV", "rest_uV"):
             row[key] = float(row[key])
-        for key in ("cue", "label", "raw_label"):
+        for key in ("end_sample", "block", "cue", "label", "raw_label"):
             row[key] = int(row[key])
     return rows
 
