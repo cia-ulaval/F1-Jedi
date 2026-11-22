@@ -243,6 +243,7 @@ def test_prepare_streamer_keeps_handle_and_stop_is_clean(monkeypatch):
     monkeypatch.setitem(sys.modules, "libemg", fake_libemg)
     monkeypatch.setattr(ce, "_start_streamer", lambda items, streaming: (streamer, items))
     monkeypatch.setattr(ce, "_ACTIVE_STREAMERS", [])
+    monkeypatch.setattr(ce, "sensor_in_use", lambda: False)
     calls = []
     monkeypatch.setattr(ce.subprocess, "run", lambda *a, **k: calls.append(a))
 
@@ -328,3 +329,26 @@ def test_streamer_cleanup_skips_deep_sleep_and_always_kills_bridge():
     bridge.disconnect = lambda: (_ for _ in ()).throw(RuntimeError("BLE perdu"))
     streamer.cleanup()
     assert calls == ["stop", "kill", "smm"]                           # sifibridge tue quand meme
+
+
+def test_second_streamer_is_refused_while_sensor_in_use(monkeypatch):
+    # Bug mesure : deux lecteurs lances a 3 s d'ecart partageaient la memoire
+    # 'emg' de libemg et se remettaient a zero l'un l'autre.
+    import uuid
+    from multiprocessing import shared_memory
+    import collect_etienne as ce
+
+    in_use = ce.sensor_in_use
+    tag = f"f1jedi_test_{uuid.uuid4().hex[:8]}"
+    assert not in_use(tag)
+    held = shared_memory.SharedMemory(name=tag, create=True, size=16)
+    try:
+        assert in_use(tag)
+        monkeypatch.setitem(sys.modules, "libemg", types.SimpleNamespace())
+        monkeypatch.setattr(ce, "sensor_in_use", lambda: True)
+        with pytest.raises(RuntimeError, match="deja utilise"):
+            ce.prepare_streamer()
+    finally:
+        held.close()
+        held.unlink()
+    assert not in_use(tag)

@@ -50,6 +50,23 @@ def _stop_all_streamers():
         stop_streamer(streamer)
 
 
+def sensor_in_use(tag="emg"):
+    """True si un autre programme diffuse deja le capteur.
+
+    libemg nomme sa memoire partagee 'emg' pour tout le monde : un 2e streamer
+    la reutilise et les deux ecrivent dans le meme tampon (mesure : deux tests
+    lances a 3 s d'ecart -> repos identique au bit pres, compteur remis a zero
+    par l'autre, 3 fenetres fausses).
+    """
+    from multiprocessing import shared_memory
+    try:
+        existing = shared_memory.SharedMemory(name=tag, create=False)
+    except FileNotFoundError:
+        return False
+    existing.close()
+    return True
+
+
 def _start_streamer(shared_memory_items, streaming):
     # Streamer libemg dont l'arret ne met pas le BioPoint en veille profonde
     # (sinon il faut appuyer sur son bouton avant chaque lancement).
@@ -75,6 +92,9 @@ def prepare_streamer(streaming=False, return_streamer=False):
     """
     import libemg
 
+    if sensor_in_use():
+        raise RuntimeError("Le capteur est deja utilise par un autre programme (test, collecte ou pont de jeu). "
+                           "Ferme-le d'abord : deux lecteurs en meme temps melangent leurs donnees.")
     shared_memory_items = [
         ["emg", (config.EMG_FS, 1), np.double],
         ["emg_count", (1, 1), np.int32],
