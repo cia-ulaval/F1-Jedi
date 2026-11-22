@@ -5,8 +5,10 @@
 """
 
 import argparse
+import atexit
 import datetime
 import shutil
+import subprocess
 import sys
 
 import numpy as np
@@ -17,10 +19,43 @@ except ImportError:
     from code_etienne.config import Config
 
 config = Config()
+_ACTIVE_STREAMERS = []
 
 
-def prepare_streamer(streaming=False):
+def stop_streamer(streamer, timeout_s=5.0):
+    """Arrete le processus du streamer libemg sans laisser sifibridge tenir le Bluetooth.
+
+    On demande d'abord l'arret normal (libemg arrete l'acquisition, met le
+    capteur en veille, se deconnecte et tue sifibridge). Cet arret n'a lieu
+    qu'a l'arrivee du paquet suivant : si le capteur est eteint, il ne vient
+    jamais, et on tue alors tout l'arbre de processus (streamer + sifibridge).
+    """
+    if streamer in _ACTIVE_STREAMERS:
+        _ACTIVE_STREAMERS.remove(streamer)
+    if streamer is None or not streamer.is_alive():
+        return
+    streamer.signal.set()
+    streamer.join(timeout_s)
+    if streamer.is_alive():
+        print("Streamer bloque : arret force (streamer + sifibridge).")
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(streamer.pid)], capture_output=True)
+        else:
+            streamer.terminate()
+        streamer.join(2.0)
+
+
+def _stop_all_streamers():
+    for streamer in list(_ACTIVE_STREAMERS):
+        stop_streamer(streamer)
+
+
+def prepare_streamer(streaming=False, return_streamer=False):
     """Demarre le flux EMG du BioPoint et retourne l'OnlineDataHandler.
+
+    Avec return_streamer=True, retourne (streamer, odh) : appeler
+    stop_streamer(streamer) dans un finally. Sinon le streamer est arrete
+    automatiquement a la sortie du programme.
 
     Le filtrage (passe-bande 20-450 Hz + coupe-bande secteur) est fait par le
     capteur lui-meme, a la collecte comme en temps reel. On n'ajoute donc
@@ -33,7 +68,7 @@ def prepare_streamer(streaming=False):
         ["emg", (config.EMG_FS, 1), np.double],
         ["emg_count", (1, 1), np.int32],
     ]
-    _streamer, smi = libemg.streamers.sifi_biopoint_streamer(
+    streamer, smi = libemg.streamers.sifi_biopoint_streamer(
         name=config.DEVICE_NAME,
         shared_memory_items=shared_memory_items,
         ecg=False,
@@ -45,7 +80,15 @@ def prepare_streamer(streaming=False):
         emg_notch_freq=config.NOTCH,
         streaming=streaming,
     )
-    return libemg.data_handler.OnlineDataHandler(shared_memory_items=smi)
+    if not _ACTIVE_STREAMERS:
+        # Enregistre APRES l'import de multiprocessing (par libemg) : atexit
+        # est LIFO, donc cet arret propre passe avant que multiprocessing tue
+        # les processus daemon et laisse sifibridge orphelin.
+        atexit.unregister(_stop_all_streamers)
+        atexit.register(_stop_all_streamers)
+    _ACTIVE_STREAMERS.append(streamer)
+    odh = libemg.data_handler.OnlineDataHandler(shared_memory_items=smi)
+    return (streamer, odh) if return_streamer else odh
 
 
 def prepare_media_folder(gui=None):

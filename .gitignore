@@ -28,3 +28,6 @@ Thumbs.db
 pyproject.toml
 uv.lock
 
+
+# Enregistrements des tests sur capteur (rejouables hors ligne, non versionnes)
+dataset/live/

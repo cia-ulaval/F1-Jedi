@@ -208,3 +208,68 @@ def test_rest_calibration_is_capped_when_user_is_contracting(recordings, model_s
     strong = frame_signal([r for r in recordings[2] if r["label"] == 2][0]["signal"], config.WINDOW_SIZE, config.WINDOW_INC)
     decoder.calibrate_rest(strong)
     assert decoder.rest_level <= model_s2.rest_level + np.log(3.0) + 1e-9
+
+
+class FakeStreamer:
+    """Imite le processus SiFiBridgeStreamer de libemg."""
+
+    def __init__(self, stops_on_signal):
+        import threading
+        self.signal = threading.Event()
+        self.pid = 4242
+        self._alive = True
+        self._stops_on_signal = stops_on_signal
+
+    def is_alive(self):
+        return self._alive
+
+    def join(self, timeout=None):
+        if self._stops_on_signal and self.signal.is_set():
+            self._alive = False
+
+    def terminate(self):
+        self._alive = False
+
+
+def test_prepare_streamer_keeps_handle_and_stop_is_clean(monkeypatch):
+    # Bug : prepare_streamer jetait le processus du streamer, impossible de
+    # l'arreter proprement -> sifibridge pouvait rester accroche au Bluetooth.
+    import collect_etienne as ce
+
+    streamer = FakeStreamer(stops_on_signal=True)
+    fake_libemg = types.SimpleNamespace(
+        streamers=types.SimpleNamespace(sifi_biopoint_streamer=lambda **kwargs: (streamer, kwargs["shared_memory_items"])),
+        data_handler=types.SimpleNamespace(OnlineDataHandler=lambda shared_memory_items: "odh"),
+    )
+    monkeypatch.setitem(sys.modules, "libemg", fake_libemg)
+    monkeypatch.setattr(ce, "_ACTIVE_STREAMERS", [])
+    calls = []
+    monkeypatch.setattr(ce.subprocess, "run", lambda *a, **k: calls.append(a))
+
+    assert ce.prepare_streamer() == "odh"                      # ancienne interface inchangee
+    assert ce._ACTIVE_STREAMERS == [streamer]                  # arrete a la sortie (atexit)
+    got_streamer, odh = ce.prepare_streamer(return_streamer=True)
+    assert got_streamer is streamer and odh == "odh"
+    ce.stop_streamer(streamer)
+    assert streamer.signal.is_set() and not streamer.is_alive()
+    assert calls == []                                         # arret normal, pas de kill
+
+
+def test_stop_streamer_kills_tree_when_sensor_is_silent(monkeypatch):
+    # Capteur eteint : libemg n'execute son nettoyage qu'au paquet suivant,
+    # qui n'arrive jamais. On doit tuer streamer + sifibridge.
+    import collect_etienne as ce
+
+    streamer = FakeStreamer(stops_on_signal=False)
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        streamer._alive = False
+
+    monkeypatch.setattr(ce.subprocess, "run", fake_run)
+    monkeypatch.setattr(ce.sys, "platform", "win32")
+    monkeypatch.setattr(ce, "_ACTIVE_STREAMERS", [streamer])
+    ce.stop_streamer(streamer, timeout_s=0.01)
+    assert calls == [["taskkill", "/F", "/T", "/PID", "4242"]]
+    assert ce._ACTIVE_STREAMERS == []
