@@ -16,6 +16,7 @@ import time
 
 import numpy as np
 
+from emg_core import frame_signal
 from live_common import NO_CUE, Cue, Sensor, config, new_run_dir, run_for, save_json, say
 
 
@@ -96,9 +97,16 @@ def analyse(reader, windows):
         result["last_window_equals_reversed_tape"] = bool(
             start >= 0 and np.array_equal(emg[start:start + config.WINDOW_SIZE][::-1], last_window))
 
-    rms = np.sqrt(np.mean((emg - emg.mean()) ** 2)) if len(emg) else 0.0
-    result["rms_uV"] = float(rms * 1e6)
-    result["abs_max_uV"] = float(np.abs(emg).max() * 1e6) if len(emg) else 0.0
+    # RMS par fenetre de 200 ms. Le filtre du capteur met ~100 ms a se stabiliser
+    # au demarrage (mesure : 437 uV sur la 1re fenetre, puis ~7 uV) : on mesure
+    # le repos apres 0.5 s, et le transitoire a part.
+    blocks = frame_signal(emg, config.WINDOW_SIZE, config.WINDOW_SIZE)
+    if len(blocks):
+        rms = np.sqrt(np.mean((blocks - blocks.mean(axis=1, keepdims=True)) ** 2, axis=1)) * 1e6
+        settled = rms[int(0.5 * config.EMG_FS) // config.WINDOW_SIZE:]
+        result["startup_transient_uV"] = float(rms[0])
+        result["rest_rms_uV_median"] = float(np.median(settled)) if len(settled) else None
+        result["rest_rms_uV_p90"] = float(np.percentile(settled, 90)) if len(settled) else None
     return result
 
 
