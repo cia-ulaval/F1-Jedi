@@ -1,0 +1,1 @@
+{"num_motions": 3, "num_reps": 7, "classes": ["Hand_Close", "No_Motion", "Wrist_Extension"], "class_map": {"0": "Hand_Close", "1": "No_Motion", "2": "Wrist_Extension"}, "time": "2026-11-22T13:46:16.288535"}
