@@ -20,6 +20,12 @@ from emg_core import OnlineDecoder, ThreeGestureModel, extract_features, frame_s
 
 config = Config()
 
+# Les tests rejouent S1/S2 (une autre personne) avec le trio de reference de la
+# reecriture. La config du jeu peut utiliser un autre trio (Hand_Open pour Ali).
+REFERENCE_GESTURES = ["No_Motion", "Hand_Close", "Wrist_Extension"]
+for _cfg in (config, rt.config, tr.config):
+    _cfg.GESTURES = list(REFERENCE_GESTURES)
+
 
 @pytest.fixture(scope="module")
 def recordings():

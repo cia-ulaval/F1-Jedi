@@ -1,4 +1,4 @@
-"""Etape 2 - qualite du signal : N tours de repos / Hand_Close / Wrist_Extension.
+"""Etape 2 - qualite du signal : N tours de repos / geste A / geste B (config.GESTURES).
 
     python collect/code_etienne/live/live_signal_quality.py --rounds 3 --hold 4
     python collect/code_etienne/live/live_signal_quality.py --replay dataset/live/<run>   # reanalyse
@@ -189,7 +189,7 @@ def report(result):
         rounds = ", ".join(f"{v:.1f}" for v in info["per_round_uV"])
         say(f"  {name:<16} RMS median {info['median_rms_uV']:6.1f} uV{ratio}   (par tour : {rounds})")
     cv = result["stage2_cv_accuracy"]
-    say(f"  Etage 2 (Hand_Close vs Wrist_Extension), validation par tour : "
+    say(f"  Etage 2 ({config.GESTURES[1]} vs {config.GESTURES[2]}), validation par tour : "
         f"{'n/a' if cv is None else f'{cv:.1%}'}  {['%.0f%%' % (100 * a) for a in result['stage2_cv_accuracy_per_round']]}")
     if "stage2_fisher" in result:
         say(f"  Separation de Fisher (ecart/dispersion du score LDA) : {result['stage2_fisher']:.2f}  (> 2 = bien separe)")
@@ -200,7 +200,7 @@ def report(result):
     if "latest_model" in result:
         acc = result["latest_model"]["stage2_accuracy_per_gesture"]
         say(f"  (Dernier modele sauvegarde, peut-etre d'une autre personne : "
-            f"Hand_Close {acc[0]:.0%}, Wrist_Extension {acc[1]:.0%})")
+            f"{config.GESTURES[1]} {acc[0]:.0%}, {config.GESTURES[2]} {acc[1]:.0%})")
     say(f"  Cibles : {result['targets']}")
     if result["ready_to_collect"]:
         weak = [n for n, i in result["gestures"].items() if i.get("ratio_vs_rest", 99) < TARGET_RATIO]

@@ -25,6 +25,7 @@ from realtime_test_etienne import find_last_model, load_model
 CUE_TEXT = {
     "No_Motion": "REPOS (main detendue)",
     "Hand_Close": "HAND_CLOSE (poing ferme)",
+    "Hand_Open": "HAND_OPEN (doigts tendus et ecartes)",
     "Wrist_Extension": "WRIST_EXTENSION (poignet releve)",
 }
 

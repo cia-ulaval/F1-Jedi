@@ -15,18 +15,22 @@ class Config:
 
         # ------------------------------------------------------------ gestes
         # Ordre impose : [repos, geste A, geste B].
-        # Choix fait sur les donnees S1 et S2 : avec le seul canal EMG du
-        # BioPoint, Wrist_Flexion est indiscernable du repos (meme RMS) et
-        # Hand_Open change trop d'une session a l'autre. Le trio ci-dessous
-        # est le seul qui reste separable d'une session a l'autre.
-        self.GESTURES = ["No_Motion", "Hand_Close", "Wrist_Extension"]
+        # Le bon trio depend de la personne et de la position du capteur.
+        # - S1/S2 (une autre personne) : Hand_Close ; Hand_Open y changeait trop
+        #   d'une session a l'autre (S1->S2 : 53.5 %).
+        # - Ali, capteur sur les extenseurs (enquete du 23/11, dataset/live/
+        #   *_survey) : poing leger/moyen a 1.2x/1.7x le repos -> invisible ;
+        #   Hand_Open 11.2x -> 100 % en temps reel simule, 0 % pris pour
+        #   Wrist_Extension. D'ou Hand_Open.
+        # Pour revenir au poing : remettre "Hand_Close" ici (modele S3).
+        self.GESTURES = ["No_Motion", "Hand_Open", "Wrist_Extension"]
         # Identifiants libemg (images/gesture_list.json) pour telecharger les images.
-        self.GESTURE_IDS = {"No_Motion": 1, "Hand_Close": 2, "Wrist_Extension": 5}
+        self.GESTURE_IDS = {"No_Motion": 1, "Hand_Close": 2, "Hand_Open": 3, "Wrist_Extension": 5}
         self.CLASSES = [self.GESTURE_IDS[name] for name in self.GESTURES]
         self.NUM_CLASSES = len(self.GESTURES)
 
         # ---------------------------------------------------------- collecte
-        self.SESSION_COLLECT = 3        # prochaine session a enregistrer -> dataset/S3
+        self.SESSION_COLLECT = 4        # prochaine session a enregistrer -> dataset/S4 (trio Hand_Open)
         self.REP_TIME = 5
         self.REST_TIME = 2
         self.NUM_REPS = 7
@@ -35,7 +39,7 @@ class Config:
         # ------------------------------------------------------ entrainement
         # Sessions utilisees par defaut. Apres une nouvelle collecte, lance
         # plutot : trainning_etienne.py --sessions 3
-        self.SESSIONS_TRAIN = [1, 2]
+        self.SESSIONS_TRAIN = [4]
         self.TRAIN_REPS = [2, 0, 4, 1, 5]
         self.TEST_REPS = [3, 6]
         self.N_LAGS = 9                 # nb de retards d'autocorrelation (etage 2)
@@ -55,8 +59,11 @@ class Config:
         # --------------------------------------------------------------- jeu
         # Action de chaque geste en mode conduite : "straight", "steer_left",
         # "steer_right" ou "brake". Echange gauche/droite ici si besoin.
+        # Par NOM : les deux gestes de gauche sont listes, donc un ancien modele
+        # au poing (S3) marche aussi en jeu.
         self.GAME_ACTIONS = {
             "No_Motion": "straight",
+            "Hand_Open": "steer_left",
             "Hand_Close": "steer_left",
             "Wrist_Extension": "steer_right",
         }

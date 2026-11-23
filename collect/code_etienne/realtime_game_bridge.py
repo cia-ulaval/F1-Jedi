@@ -8,7 +8,7 @@ Touches (clavier global) :
     R  recalibration rapide (~15 s)             Q  quitter
 
 Mode conduite : accelerateur (bouton A) maintenu, les gestes dirigent selon
-config.GAME_ACTIONS (par defaut repos = tout droit, Hand_Close = gauche,
+config.GAME_ACTIONS (par defaut repos = tout droit, Hand_Open ou Hand_Close = gauche,
 Wrist_Extension = droite).
 """
 
