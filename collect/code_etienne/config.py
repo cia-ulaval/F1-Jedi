@@ -48,9 +48,11 @@ class Config:
         self.VOTE_WINDOW = 9            # vote majoritaire sur 9 fenetres (~180 ms) ; 1 = desactive
         # Attaque d'une contraction : nb de fenetres (20 ms chacune) avant de
         # choisir un geste. Rejeu du test live du 23/11 : 0 -> coups contraires
-        # au debut de 4 consignes sur 8 (max 0.52 s) ; 10 -> 2 sur 8 (max 0.32 s)
-        # mais +200 ms sur chaque virage. 0 par defaut ; essayer 10 en jeu.
-        self.ONSET_WINDOWS = 0
+        # au debut de 4 consignes sur 8 (max 0.52 s) ; 10 -> 2/8 (max 0.32 s) ;
+        # 15 -> 1/8 (0.22 s), +300 ms par virage. En jeu (Mario Kart, 23/11) :
+        # course a 0 gachee par des coups a gauche avant les virages a droite,
+        # course a 15 nettement plus fluide. D'ou 15.
+        self.ONSET_WINDOWS = 15
         self.ADAPT = True               # suivi de la derive (repos, amplitude, spectre)
         self.REST_CALIBRATION_S = 3.0   # mesure du repos au demarrage
         self.RECALIBRATION_S = 3.0      # duree par geste pour la recalibration (touche R)
