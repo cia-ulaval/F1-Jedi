@@ -49,19 +49,25 @@ pip install -r requirements.txt
 ### Current EMG Workflow (3 gestures)
 The BioPoint has a single EMG channel. With five gestures the decoder degraded within
 minutes (skin temperature, sweat, muscle fatigue), so the pipeline now uses **three
-gestures**: `No_Motion`, `Hand_Close`, `Wrist_Extension`. On the recorded sessions,
-`Wrist_Flexion` has the same amplitude as rest and `Hand_Open` changes too much from one
-session to the next, so these two were dropped.
+gestures**: `No_Motion`, `Hand_Open`, `Wrist_Extension` (sensor on the dorsal forearm,
+over the wrist extensors, 3-4 fingers below the elbow).
+
+Which second gesture works depends on the person and on the sensor position. For the
+first subject (sessions S1/S2) it was `Hand_Close`. For the current one (S3-S5), a normal
+fist is barely above rest at this position (1.7x), while `Hand_Open` is ~10x and stays
+stable when the sensor is removed and put back (S4 -> S5: 90.7 %, S5 -> S4: 97.4 %).
+Measure it with `collect/code_etienne/live/live_gesture_survey.py` before choosing; the
+trio is `GESTURES` in `config.py`.
 
 ```bash
 # Activate the project virtual environment (Windows)
 .\.venv\Scripts\Activate.ps1
 
 # 1. Collect one session (3 gestures x 7 repetitions, about 3 minutes)
-python .\collect\code_etienne\collect_etienne.py --session 3
+python .\collect\code_etienne\collect_etienne.py --session 6
 
-# 2. Train and evaluate on that session
-python .\collect\code_etienne\trainning_etienne.py --sessions 3
+# 2. Train and evaluate (one or several sessions)
+python .\collect\code_etienne\trainning_etienne.py --sessions 4,5
 
 # 3. Check the decoder in the console (latest model is loaded automatically)
 python .\collect\code_etienne\realtime_test_etienne.py
@@ -94,10 +100,21 @@ for the collection protocol.
 | Gesture | Action |
 |---------|--------|
 | `No_Motion` (relaxed hand) | Straight, accelerator held (button `A`) |
-| `Hand_Close` | Steer left, accelerator held |
-| `Wrist_Extension` | Steer right, accelerator held |
+| `Hand_Open` (fingers extended and spread) | Steer left, accelerator held |
+| `Wrist_Extension` (wrist lifted firmly, fingers relaxed) | Steer right, accelerator held |
 
 The mapping is `GAME_ACTIONS` in `config.py` (swap left/right there, or use `brake`).
+A weak wrist extension looks like `Hand_Open`: lift the wrist firmly. The decoder waits
+300 ms at the start of each contraction before choosing a gesture (`ONSET_WINDOWS`),
+which removed most wrong-way jerks in Mario Kart.
+
+Live tests with the sensor (connection, signal quality, live accuracy, gesture survey,
+offline replay of the recordings in `dataset/live/`) are in `collect/code_etienne/live/`.
+
+### Mario Kart Wii on Dolphin
+Map GameCube port 1 to `XInput/0/Gamepad` (A = `Button A`, B = `Button B`, main stick =
+`Left X-/X+/Y-/Y+`), set Wii Remote 1 to None and enable Background Input. Start the bridge
+first (it creates the virtual pad), then Dolphin; choose automatic drift in the game.
 
 Keyboard keys while the bridge runs: `O` drive mode, `P` manual keyboard mode
 (`V` = A, `B` = B, `G`/`J` = left/right, `Y`/`H` = up/down, `Space` = X), `R` quick

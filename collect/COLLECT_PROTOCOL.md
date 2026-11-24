@@ -7,18 +7,22 @@ Enregistrer une session propre, entrainer le modele a 3 gestes, puis jouer.
 | Geste | Role en jeu | Pourquoi |
 |-------|-------------|----------|
 | `No_Motion` | tout droit | main detendue |
-| `Hand_Close` | gauche | poing ferme, contraction moyenne |
-| `Wrist_Extension` | droite | poignet releve, contraction forte |
+| `Hand_Open` | gauche | doigts tendus et ecartes, poignet a plat |
+| `Wrist_Extension` | droite | poignet releve FRANCHEMENT, doigts relaches |
 
-Le BioPoint n'a qu'un canal EMG. Sur les sessions S1 et S2, `Wrist_Flexion` a le meme
-niveau que le repos et `Hand_Open` change trop d'une session a l'autre : ils ne sont plus
-utilises. Les anciennes sessions a 5 gestes restent lisibles, le script n'en garde que les
-3 gestes ci-dessus.
+Le BioPoint n'a qu'un canal EMG : le bon 2e geste depend de la personne et de la position
+du capteur. Pour S1/S2 (une autre personne) c'etait `Hand_Close`. Pour S3-S5, capteur sur
+les extenseurs, un poing moyen est a 1.7x le repos (invisible) et `Hand_Open` a ~10x,
+stable quand on retire et remet le capteur. A mesurer avec `live/live_gesture_survey.py`
+avant de choisir (`GESTURES` dans config.py).
+
+Un `Wrist_Extension` mou (< ~70 uV) est pris pour `Hand_Open` : le tenir franchement.
 
 ## Avant chaque session
-- Capteur toujours au meme endroit et sur le meme bras. Bonne position : celle ou
-  `Wrist_Extension` donne un signal nettement plus fort que le repos (verifier avec
-  realtime_test_etienne.py, colonne rms).
+- Capteur toujours au meme endroit et sur le meme bras : dessus de l'avant-bras, sur le
+  muscle qui gonfle quand on releve le poignet, 3-4 doigts sous le coude, electrodes dans
+  la longueur. Chercher la position : `live/live_rms_meter.py` ; valider :
+  `live/live_signal_quality.py` (doit finir par "PRET pour la collecte").
 - Peau propre et seche. Attendre 1 a 2 minutes apres la pose : le contact se stabilise
   quand la peau se rechauffe sous l'electrode.
 - Meme posture du bras qu'en jeu.
@@ -32,10 +36,10 @@ utilises. Les anciennes sessions a 5 gestes restent lisibles, le script n'en gar
 ## Commandes
 ```powershell
 # 1. Collecte (3 gestes x 7 repetitions de 5 s, environ 3 minutes)
-python .\collect\code_etienne\collect_etienne.py --session 3
+python .\collect\code_etienne\collect_etienne.py --session 6
 
 # 2. Entrainement + evaluation (train reps 2,0,4,1,5 ; test reps 3,6 par defaut)
-python .\collect\code_etienne\trainning_etienne.py --sessions 3
+python .\collect\code_etienne\trainning_etienne.py --sessions 4,5
 
 # Variantes
 python .\collect\code_etienne\trainning_etienne.py --sessions 3 --train-reps 0,1,2,3,4 --test-reps 5,6
