@@ -46,6 +46,11 @@ class Config:
 
         # -------------------------------------------------------- temps reel
         self.VOTE_WINDOW = 9            # vote majoritaire sur 9 fenetres (~180 ms) ; 1 = desactive
+        # Attaque d'une contraction : nb de fenetres (20 ms chacune) avant de
+        # choisir un geste. Rejeu du test live du 23/11 : 0 -> coups contraires
+        # au debut de 4 consignes sur 8 (max 0.52 s) ; 10 -> 2 sur 8 (max 0.32 s)
+        # mais +200 ms sur chaque virage. 0 par defaut ; essayer 10 en jeu.
+        self.ONSET_WINDOWS = 0
         self.ADAPT = True               # suivi de la derive (repos, amplitude, spectre)
         self.REST_CALIBRATION_S = 3.0   # mesure du repos au demarrage
         self.RECALIBRATION_S = 3.0      # duree par geste pour la recalibration (touche R)

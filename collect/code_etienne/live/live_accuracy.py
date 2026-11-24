@@ -88,11 +88,13 @@ def main():
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--model", type=str, default=None, help="Modele .json (defaut : le plus recent)")
     parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--onset-windows", type=int, default=config.ONSET_WINDOWS)
     args = parser.parse_args()
 
     model_path = args.model or str(find_last_model())
     model = load_model(model_path)
-    decoder = OnlineDecoder(model, vote_window=config.VOTE_WINDOW, adapt=config.ADAPT)
+    decoder = OnlineDecoder(model, vote_window=config.VOTE_WINDOW, adapt=config.ADAPT,
+                            onset_windows=args.onset_windows)
     seed = args.seed if args.seed is not None else random.randrange(10 ** 6)
     order = cue_order(args.cues, len(model.gestures), random.Random(seed))
 
@@ -115,7 +117,8 @@ def main():
     result = live_metrics.analyse(log.rows, model.gestures)
     result.update({"model": model_path, "seed": seed, "order": [model.gestures[k] for k in order],
                    "hold_s": args.hold, "gap_s": args.gap, "rest_calibration_uV": rest_measured,
-                   "vote_window": config.VOTE_WINDOW, "adapt": config.ADAPT, "lost_samples": reader.lost})
+                   "vote_window": config.VOTE_WINDOW, "adapt": config.ADAPT, "lost_samples": reader.lost,
+                   "onset_windows": args.onset_windows})
     result["targets"] = live_metrics.report(result, say)
     save_json(run_dir / "summary.json", result)
     say(f"Resultats : {run_dir}")

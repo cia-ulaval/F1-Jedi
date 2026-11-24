@@ -215,9 +215,12 @@ class OnlineDecoder:
 
     def __init__(self, model, vote_window=9, adapt=True,
                  rest_tau_s=5.0, active_tau_s=15.0, shift_tau_s=15.0,
-                 max_rest_drift=np.log(4.0), max_shift_frac=1.5):
+                 max_rest_drift=np.log(4.0), max_shift_frac=1.5, onset_windows=0):
         self.model = model
         self.vote_window = max(1, int(vote_window))
+        # Attaque d'une contraction : pendant ces fenetres on ne choisit pas
+        # encore de geste (sortie repos, score remis a jour a chaque fenetre).
+        self.onset_windows = max(0, int(onset_windows))
         self.adapt = adapt
         step_s = model.window_inc / float(model.fs)
         self._rest_alpha = step_s / rest_tau_s
@@ -317,12 +320,18 @@ class OnlineDecoder:
         raw_score = float(model.gesture_score(shape, self.shift)[0])
         if self.is_active:
             if not was_active:
-                self._score, self._active_run = raw_score, 0
+                self._active_run = 0
+            self._active_run += 1
+            if self._active_run <= max(1, self.onset_windows):
+                # Debut de contraction : le score repart de la fenetre courante.
+                self._score = raw_score
             else:
                 # Accumule l'evidence pendant la contraction (constante ~100 ms).
                 self._score += 0.2 * (raw_score - self._score)
-            self._active_run += 1
-            raw_label = 2 if self._score > 0 else 1
+            if self._active_run <= self.onset_windows:
+                raw_label = 0
+            else:
+                raw_label = 2 if self._score > 0 else 1
         else:
             self._active_run = 0
             raw_label = 0

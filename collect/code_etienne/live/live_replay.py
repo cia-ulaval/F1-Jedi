@@ -85,7 +85,8 @@ def build_decoder(model, args):
         value = getattr(args, name, None)
         if value is not None:
             kwargs[name] = value
-    return OnlineDecoder(model, vote_window=args.vote_window, adapt=not args.no_adapt, **kwargs)
+    return OnlineDecoder(model, vote_window=args.vote_window, adapt=not args.no_adapt,
+                         onset_windows=args.onset_windows, **kwargs)
 
 
 def main():
@@ -97,6 +98,7 @@ def main():
     parser.add_argument("--rest-tau", dest="rest_tau_s", type=float, default=None)
     parser.add_argument("--active-tau", dest="active_tau_s", type=float, default=None)
     parser.add_argument("--shift-tau", dest="shift_tau_s", type=float, default=None)
+    parser.add_argument("--onset-windows", type=int, default=config.ONSET_WINDOWS)
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--regular-grid", action="store_true",
                         help="Fenetres tous les 40 echantillons au lieu de celles rendues en direct")

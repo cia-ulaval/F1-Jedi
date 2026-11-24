@@ -92,7 +92,7 @@ def release_gamepad(gamepad):
     gamepad.update()
 
 
-def run_realtime_game(model_path=None, vote_window=None, adapt=None, reader=None):
+def run_realtime_game(model_path=None, vote_window=None, adapt=None, reader=None, onset_windows=None):
     if vg is None:
         raise ImportError("vgamepad n'est pas installe : pip install -r requirements.txt (Windows + pilote ViGEmBus).")
     if keyboard is None:
@@ -101,7 +101,9 @@ def run_realtime_game(model_path=None, vote_window=None, adapt=None, reader=None
     model = load_model(model_path)
     vote_window = config.VOTE_WINDOW if vote_window is None else vote_window
     adapt = config.ADAPT if adapt is None else adapt
-    decoder = OnlineDecoder(model, vote_window=vote_window, adapt=adapt)
+    onset_windows = config.ONSET_WINDOWS if onset_windows is None else onset_windows
+    decoder = OnlineDecoder(model, vote_window=vote_window, adapt=adapt, onset_windows=onset_windows)
+    print(f"[bridge] vote {vote_window} fenetres, attente d'attaque {onset_windows} fenetres ({onset_windows * 20} ms)")
     for label, name in enumerate(model.gestures):
         print(f"[bridge] {name:<16} -> {action_for_label(model, label)}")
 
@@ -168,8 +170,11 @@ def main():
     parser.add_argument("--vote-window", "--majority-vote", type=int, default=config.VOTE_WINDOW,
                         help="Taille du vote majoritaire en fenetres (1 = desactive)")
     parser.add_argument("--no-adapt", action="store_true", help="Desactive le suivi de derive")
+    parser.add_argument("--onset-windows", type=int, default=config.ONSET_WINDOWS,
+                        help="Fenetres d'attente au debut d'un geste avant de choisir (10 = 200 ms)")
     args = parser.parse_args()
-    run_realtime_game(args.model_path, vote_window=args.vote_window, adapt=not args.no_adapt)
+    run_realtime_game(args.model_path, vote_window=args.vote_window, adapt=not args.no_adapt,
+                      onset_windows=args.onset_windows)
 
 
 if __name__ == "__main__":

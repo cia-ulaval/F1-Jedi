@@ -403,3 +403,24 @@ def test_live_metrics_on_follow_the_cue_replay(recordings):
     assert result["missed_cues"] == {"Hand_Close": 0, "Wrist_Extension": 0}
     assert result["flicker_during_cues"] <= 2
     assert result["skipped_window_jumps"] == 0
+
+
+def test_onset_windows_delays_the_choice_and_zero_changes_nothing(recordings, model_s2):
+    # Mesure live 23/11 : au debut d'un Wrist_Extension, le decodeur sortait
+    # l'autre geste pendant 0.28-0.52 s (coup contraire en jeu).
+    rec = [r for r in recordings[2] if r["label"] == 2 and r["rep"] == 3][0]
+    rest = [r for r in recordings[2] if r["label"] == 0 and r["rep"] == 3][0]
+    signal = np.concatenate([rest["signal"][:4000], rec["signal"]])
+    windows = frame_signal(signal, config.WINDOW_SIZE, config.WINDOW_INC)
+
+    def run(**kwargs):
+        decoder = OnlineDecoder(model_s2, vote_window=1, **kwargs)
+        return [decoder.update(w) for w in windows]
+
+    default, zero = run(), run(onset_windows=0)
+    assert [o["label"] for o in default] == [o["label"] for o in zero]
+    delayed = run(onset_windows=10)
+    first_active = next(i for i, o in enumerate(delayed) if o["raw_label"] != 0 or o["label"] != 0)
+    onset = next(i for i, o in enumerate(default) if o["raw_label"] != 0)
+    assert all(o["raw_label"] == 0 for o in delayed[onset:onset + 10])
+    assert first_active >= onset + 10
